@@ -5,8 +5,6 @@ import signal
 import subprocess
 import time
 
-from tempfile import NamedTemporaryFile
-
 log = logging.getLogger(__name__)
 
 
@@ -240,44 +238,3 @@ class SSHComms(BaseComms):
         log.debug("No SSH tunnel connections found")
         return False
 
-
-def send_msg_file(message, user, address, destination, timeout=120):
-    log.info("Sending message file via SSH")
-    success = False
-
-    with NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(bytes(message.encode("utf8")))
-
-        # Python 3.2 does not contain timeout functionality but it's too late to consider 3.4 at this stage
-
-        try:
-            cmd = ["rsync", "-az",
-                   "{0}".format(tmp.name), "{0}@{1}:{2}".format(user, address, destination)]
-            rc = int(subprocess.call(cmd))
-            if rc != 0:
-                log.error("Failed to send message file with return code {0}".format(rc))
-            else:
-                success = True
-        except subprocess.CalledProcessError:
-            log.error("Failed to send message file")
-        finally:
-            os.unlink(tmp.name)
-    return success
-
-
-def send_zip_file(zipfile, user, address, destination = "lrad/"):
-    log.info("Sending message file via SSH")
-    success = False
-
-    try:
-        cmd = ["rsync", "-a",
-               "{0}".format(zipfile), "{0}@{1}:{2}".format(user, address, destination)]
-        rc = int(subprocess.call(cmd))
-        if rc != 0:
-            log.error("Failed to send message file with return code {0}".format(rc))
-        else:
-            success = True
-    except subprocess.CalledProcessError:
-        log.error("Failed to send message file")
-
-    return success

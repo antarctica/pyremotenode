@@ -14,8 +14,8 @@ import time
 from argparse import ArgumentParser
 from datetime import datetime, timedelta
 
-from lrad import setup_logging
-from lrad.comms import IridiumComms, SSHComms, send_msg_file
+from basscheduler import setup_logging
+from basscheduler.comms import IridiumComms, SSHComms
 
 log = setup_logging(__name__)
 
@@ -44,17 +44,10 @@ if __name__ == "__main__":
 
     # Bring up the Iridium, then the SSH
     #
-    # The lrad.comms module handles all this, but the basic premise is that we try hard
+    # The basscheduler.comms module handles all this, but the basic premise is that we try hard
     # everything up and then attempt to kill it gracefully if possible
     if args.skip_iridium or (ir.start() and ir.is_ready()):
-        log.info("Sending status update...")
-        msg = """
-LRAD is alive and Iridium comms are available
-
-The device will attempt to bring up a reverse tunnel on {0} imminently""".format(args.port)
-        send_msg_file(msg, args.user, args.server,
-                  "lrad/logs/monitor_update.{0}.log".format(datetime.now().strftime("%Y-%m-%d.%H:%M")))
-        log.info("Starting SSH")
+        log.info("Starting SSH tunnel")
 
         if not ssh.start():
             log.error("Failed to start SSH")

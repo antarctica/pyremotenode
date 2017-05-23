@@ -2,7 +2,7 @@ import logging
 import logging.handlers
 import socket
 
-VERSION = 0.1
+__VERSION = 0.1
 
 
 def setup_logging(name, level=logging.DEBUG):
@@ -35,7 +35,7 @@ def setup_logging(name, level=logging.DEBUG):
     )
     syslog.setLevel(level=level)
     syslog.setFormatter(logging.Formatter(
-        fmt="{{asctime}} {hostname} LRAD [{{process}}]: {{message}}".format(hostname=hostname),
+        fmt="{{asctime}} {hostname} BASSCHEDULER [{{process}}]: {{message}}".format(hostname=hostname),
         datefmt="%h %d %T",
         style='{'
     ))
@@ -44,4 +44,4 @@ def setup_logging(name, level=logging.DEBUG):
     return logging.getLogger(name)
 
 log = logging.getLogger(__name__)
-log.debug("LRAD {0}".format(VERSION))
+log.debug("BASSCHEDULER {0}".format(__VERSION))

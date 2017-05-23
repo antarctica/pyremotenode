@@ -18,7 +18,13 @@ prototype:
 - TODO: Integrate LRAD code, strip out messaging (first prototype to demo)
 - TODO: Create installation resources
 
-### Python
+### Development environment
 
-Try and avoid using features above v3.2 (but use v3) to maximise compatibility 
-with Debian Wheezy... :-(
+You will need Python v3.2 installed, use `make altinstall` to
+install it alongside your own Python3 after building it. 
+
+Set up a virtual environment: 
+
+mkvirtualenv -p `which python3.2` -a . -r requirements.txt pyscheduler
+
+
