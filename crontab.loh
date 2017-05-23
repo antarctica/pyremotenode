@@ -1,0 +1,51 @@
+# m h dom mon dow
+LANG=en_GB.utf8
+PYTHONIOENCODING=utf8
+
+#   Battery checks #1 - prior to LoH operations
+45 11 * * * ~/lrad/check_battery --critical 10.5 -r 9 -m 00 >>/data/lrad/logs/battery_critical.log 2>&1
+46 11 * * * /usr/bin/tshwctl --setdio 1_17
+50 11 * * * ~/lrad/check_battery --warning 11 --server bslceng --user ggs -r 9 -m 00 >>/data/lrad/logs/battery_warning.log 2>&1
+00 12 * * * /usr/bin/tshwctl --clrdio 1_17
+
+##
+#   Normal operations for LoH - collect data
+#
+
+# Turn on VHF antenna
+00 12 * * * /usr/bin/tshwctl --setdio 1_21
+# Run LoH collection scripts
+07 12 * * * /usr/bin/python3 ~/loh-3.1/loh_sync.py --config-file ~/loh/loh_set1.cfg 2> /data/loh/logs/loh/error/error-loh_sync_$(date +\%Y-\%m-\%dT\%H:\%M:\%S).log
+20 14 * * * /usr/bin/python3 ~/loh-3.1/loh_sync.py --config-file ~/loh/loh_set2.cfg 2> /data/loh/logs/loh/error/error-loh_sync_$(date +\%Y-\%m-\%dT\%H:\%M:\%S).log
+# Turn off VHF antenna
+20 16 * * * /usr/bin/tshwctl --clrdio 1_21
+
+#   Battery checks #2 - prior to heavier processing of data
+21 16 * * * ~/lrad/check_battery --critical 10.5 -r 9 -m 00 >>/data/lrad/logs/battery_critical.log 2>&1
+22 16 * * * /usr/bin/tshwctl --setdio 1_17
+26 16 * * * ~/lrad/check_battery --warning 11 --server bslceng --user ggs -r 9 -m 00 >>/data/lrad/logs/battery_warning.log 2>&1
+30 16 * * * /usr/bin/tshwctl --clrdio 1_17
+
+##
+#   L-RAD operations for LoH - post-process data and get an uplink working
+#
+# TODO: Enable when we know we can get the data and clear the logs via the uplink
+# 35 16 * * * ~/lrad/post_process >/data/lrad/logs/lrad_postproc.$(date +\%Y-\%m-\%dT\%H:\%M:\%S).log 2>&1
+
+# Switch on modem (Tuesday only for the moment, as it is likely broken)
+58 16 * * 2,4 /usr/bin/tshwctl --setdio 1_17
+10 17 * * 4 ~/lrad/send_status2 --server bslceng --user ggs >/data/lrad/logs/lrad_status.$(date +\%Y-\%m-\%dT\%H:\%M:\%S).log 2>&1
+# Attempt to bring up a usable tunnel
+05 17 * * 2 ~/lrad/comms --minutes 20 --server bslceng --user ggs >/data/lrad/logs/lrad_comms.$(date +\%Y-\%m-\%dT\%H:\%M:\%S).log 2>&1
+# Switch off modem
+30 17 * * 2,4 /usr/bin/tshwctl --clrdio 1_17
+
+# Zip logs
+20 11 * * * /usr/bin/find /data/loh/logs/loh/ -name '*.log' -exec /bin/gzip -9 {} \;
+20 11 * * * /usr/bin/find /data/lrad/logs/ -name 'lrad*.log' -exec /bin/gzip -9 {} \;
+
+##
+#   Sleep until 09:00, and give the poor thing a chance during winter
+#
+00 18 * * * /usr/bin/tshwctl --sleep --timewkup 54000
+
