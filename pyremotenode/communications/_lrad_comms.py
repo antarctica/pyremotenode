@@ -23,6 +23,7 @@ class IridiumComms(BaseComms):
         self._device = device
         self.re_ifip = re.compile(r'\s*inet \d+\.\d+\.\d+\.\d+')
         self._interface_path = os.path.join(os.sep, "proc", "sys", "net", "ipv4", "conf", self._device)
+        self._wait_to_stop = 10
 
         super(IridiumComms, self).__init__(*args, **kwargs)
 
