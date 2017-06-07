@@ -9,22 +9,9 @@ log = logging.getLogger(__name__)
 
 
 class BaseComms():
-    def __init__(self,
-                 max_start_checks,
-                 start_check_interval):
-        self._max_checks = max_start_checks
-        self._check_interval = start_check_interval
+    pass
 
-        self._proc = None
 
-    def start(self):
-        raise NotImplementedError
-
-    def is_ready(self):
-        raise NotImplementedError
-
-    def stop(self):
-        raise NotImplementedError
 
 
 class IridiumComms(BaseComms):

@@ -1,9 +1,9 @@
-## pyscheduler
+## pyremotenode
 
 The aim of this python module is to provide an easy manner by which to 
 schedule, monitor and communicate via / with an SBC board of non-denominational 
 Linux variety (Windows can go hang for all I care, but it should be 
-compatible if possible)...
+compatible if possible) via a multitude of transport mediums (potentially)...
 
 ### Process / TODO
 
@@ -15,8 +15,10 @@ goals.
 This customisability will be increasingly delivered from the point of first
 prototype:
 
-- TODO: Integrate LRAD code, strip out messaging (first prototype to demo)
-- TODO: Create installation resources
+- DONE: Integrate LRAD code, strip out messaging (first prototype to demo)
+- TODO: Create python resources
+- TODO: Implement direct comms between two modems for file transfer: 
+    XModem over pyserial example - https://stackoverflow.com/questions/1834247/can-i-use-the-xmodem-protocol-with-pyserial
 
 ### Development environment
 
@@ -25,6 +27,6 @@ install it alongside your own Python3 after building it.
 
 Set up a virtual environment: 
 
-mkvirtualenv -p `which python3.2` -a . -r requirements.txt pyscheduler
+mkvirtualenv -p `which python3.2` -a . -r requirements.txt pyremotenode
 
 
