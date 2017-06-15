@@ -4,10 +4,19 @@ import os
 import re
 
 DATA_KEYS=(
-    'invoke_args',
+    'args',
+    'invoke_args'
 )
 
+ARRAY_SECTIONS=(
+    'communications',
+    'monitor',
+)
+
+
 class Configuration(object):
+    RE_KEY_NUMS = re.compile(r'^(.+[^0-9])([0-9]+)$')
+
     class __Configuration:
         def __init__(self, path):
             self._path = path
@@ -19,22 +28,34 @@ class Configuration(object):
             ini = configparser.ConfigParser()
             ini.read(self._path)
 
-            for key, value in ini.defaults().items():
-                self.config[key] = self.__process_value(value)
+            # TODO: ini.defaults().items()
 
             for section in ini.sections():
                 if section not in self.config:
-                    self.config[section] = {}
+                    if section in ARRAY_SECTIONS:
+                        self.config[section] = []
+                    else:
+                        self.config[section] = {}
 
-                for key in ini.options(section):
-                    self.config[section][key] = self.__process_value(ini.get(section, key), key)
+                cur_section = self.config[section]
+
+                for k in ini.options(section):
+                    if type(cur_section) is list:
+                        (key, index) = Configuration.RE_KEY_NUMS.match(k).groups()
+                        while len(cur_section) < int(index):
+                            cur_section.append({})
+                        cur_section = self.config[section][int(index)-1]
+                    else:
+                        key = k
+                    cur_section[key] = self.__process_value(ini.get(section, k), key)
+                    cur_section = self.config[section]
 
         def __process_value(self, value, key=None):
             force = False
             if key and re.sub(r'[0-9]$', '', key) in DATA_KEYS:
                 force = True
 
-            split_data = re.split(r'\s*[=:{0}]\s*'.format(os.linesep), value, flags=re.MULTILINE)
+            split_data = re.split(r'\s*[=:{0}]\s*'.format(os.linesep), value.strip(), flags=re.MULTILINE)
 
             if len(split_data) <= 1 and not force:
                 return value
@@ -60,6 +81,10 @@ class Configuration(object):
     @staticmethod
     def check_file(path):
         logging.debug("Checking {0} is a valid configuration to use".format(path))
+
+        if not os.path.exists(path):
+            logging.error("{0} is not a file...")
+            raise os.FileNotFoundError
         return path
 
 

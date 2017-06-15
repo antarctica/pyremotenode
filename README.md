@@ -22,8 +22,12 @@ prototype:
 
 ### Development environment
 
-You will need Python v3.2 installed, use `make altinstall` to
-install it alongside your own Python3 after building it. 
+You will need Python v3.4 installed, use `make altinstall` to
+install it alongside your own Python3 after building it if it 
+does not exist in your repos.
+
+NOTE: This should work with 3.3, but not 3.2 as the scheduler 
+needs multithreading
 
 Set up a virtual environment: 
 

@@ -1,5 +1,10 @@
 from . import BaseComms
 
+__all__ = [
+    "SshTunnel",
+]
+
 
 class SshTunnel(BaseComms):
-    pass
+    def __init__(self, *args, **kwargs):
+        BaseComms.__init__(self, *args, **kwargs)

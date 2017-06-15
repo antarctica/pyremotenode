@@ -16,4 +16,4 @@ if __name__ == '__main__':
     cfg = Configuration(args.config).config
 
     m = MasterSchedule(cfg)
-    m.start()
+    m.run()

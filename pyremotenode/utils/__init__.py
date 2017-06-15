@@ -4,7 +4,7 @@ import socket
 
 from .config import Configuration
 
-__ALL__ = ["Configuration"]
+__all__ = ["Configuration"]
 
 
 def setup_logging(name, level=logging.DEBUG, syslog=False):

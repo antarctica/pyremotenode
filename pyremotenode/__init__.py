@@ -1,4 +1,6 @@
-from .schedule import MasterSchedule
+from pyremotenode.schedule import MasterSchedule
 
-__ALL__ = [MasterSchedule]
+__all__ = [MasterSchedule]
+
+
 
