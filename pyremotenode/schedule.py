@@ -28,6 +28,7 @@ class MasterSchedule(object):
         TODO:
             - dynamic configuration updates. The reason we don't do this yet is I think it's dangerous if comms tunnels
               exist and are actively used - configuration might be better updated through another agent that pulls updates
+            - decompose the communicator / monitor structure for the scheduler?
     """
 
     PRIORITY_SCHEDULE = 1
@@ -76,16 +77,19 @@ class MasterSchedule(object):
 
     def run(self):
         logging.info("Starting scheduler")
-        pprint(self._schedule.queue)
-        sys.exit(0)
+
         try:
             with pid_file(PID_FILE):
                 self._running = True
 
                 while self._running:
-                    logging.debug("Scheduler run")
-                    self._schedule.run()
-                    time.sleep(10)
+                    delay = self._schedule.run(blocking=False)
+                    logging.debug("We have {0} seconds until next event...".format(delay))
+
+                    for mon in self._monitors:
+                        if mon['ref'].last_status != BaseItem.OK:
+                            self.invoke_additional()
+
         finally:
             if os.path.exists(PID_FILE):
                 os.unlink(PID_FILE)

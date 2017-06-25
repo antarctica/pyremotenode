@@ -6,10 +6,11 @@ from pyremotenode.base import BaseItem
 class BaseMonitor(BaseItem):
     def __init__(self, *args, **kwargs):
         BaseItem.__init__(self, *args, **kwargs)
+        self.last_status = BaseItem.OK
 
     def action(self, name):
         logging.debug("Initiating item action {0}".format(name))
-        return self.monitor()
+        self.last_status = self.monitor()
 
     def monitor(self):
         raise NotImplementedError
