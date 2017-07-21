@@ -14,10 +14,8 @@ import pyremotenode.monitor
 from pyremotenode.base import BaseItem, ScheduleConfigurationError
 from pyremotenode.utils.system import pid_file
 
-from pprint import pprint
 
-
-PID_FILE=os.path.join(os.sep, "tmp", "{0}.pid".format(__name__))
+PID_FILE = os.path.join(os.sep, "tmp", "{0}.pid".format(__name__))
 
 
 class MasterSchedule(object):
@@ -67,12 +65,21 @@ class MasterSchedule(object):
                 return False
         return True
 
-    def invoke_additional(self):
+    def invoke_warning(self):
         """
-        Use this to schedule another activity from external sources,
-        such as items, immediately
+        Use this to schedule warning invocation tasks from monitors, this will directly
+        affect the schedule...
         :return:
         """
+
+        raise NotImplementedError
+
+    def invoke_critical(self):
+        """
+        User this to schedule critical invocation tasks from monitors
+        :return:
+        """
+
         raise NotImplementedError
 
     def run(self):
@@ -86,10 +93,31 @@ class MasterSchedule(object):
                     delay = self._schedule.run(blocking=False)
                     logging.debug("We have {0} seconds until next event...".format(delay))
 
-                    for mon in self._monitors:
-                        if mon['ref'].last_status != BaseItem.OK:
-                            self.invoke_additional()
+                    time_start = time.time()
 
+                    worst_mon = None
+
+                    for mon in self._monitors:
+                        if worst_mon and mon['ref'].last_status > worst_mon['ref'].last_status:
+                            worst_mon = mon
+                        else:
+                            worst_mon = mon
+
+                    if worst_mon['ref'].last_status == BaseItem.WARNING:
+                        self.invoke_warning(worst_mon)
+                    elif worst_mon['ref'].last_status == BaseItem.CRITICAL:
+                        self.invoke_critical(worst_mon)
+
+                    # NOTE: no current action for invalid statuses, I'm just assuming the
+                    # check is knackered and can be rerun but this may not be optimal
+
+                    time_spent = time.time() - time_start
+
+                    # We spent too long handling monitor states
+                    if time_spent > delay:
+                        continue
+                    else:
+                        time.sleep(delay - time_spent)
         finally:
             if os.path.exists(PID_FILE):
                 os.unlink(PID_FILE)
