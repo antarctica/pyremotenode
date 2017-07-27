@@ -11,5 +11,9 @@ class BaseItem(object):
         raise NotImplementedError
 
 
+class ScheduleRunError(Exception):
+    pass
+
+
 class ScheduleConfigurationError(Exception):
     pass

@@ -9,7 +9,7 @@ class BaseComms(BaseItem):
         BaseItem.__init__(self, *args, **kwargs)
 
     def action(self, name):
-        logging.debug("Initiating item action {0}".format(name))
+        logging.debug("Initiating item action: {0}".format(name))
 
         if name == 'start':
             return self.start()
