@@ -204,6 +204,8 @@ class MasterSchedule(object):
         signal.signal(signal.SIGINT, self._sig_handler)
 
     def _plan_schedule(self):
+        # TODO: This needs to take account of wide spanning controls!
+
         # If after 11pm, we plan to the next day
         # If before 11pm, we plan to the end of today
         # We then schedule another _plan_schedule for 11:01pm
