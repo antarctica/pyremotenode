@@ -10,6 +10,7 @@ class BaseMonitor(BaseItem):
 
     def action(self, name):
         logging.debug("Initiating item action {0}".format(name))
+
         self.last_status = self.monitor()
 
     def monitor(self):

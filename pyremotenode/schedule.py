@@ -69,6 +69,7 @@ class MasterSchedule(object):
             self._configure_communicators()
             self._plan_schedule()
         else:
+            # TODO: Sleep!
             raise ScheduleRunError("Failed on an unhealthy initial check, avoiding scheduler startup...")
 
     def initial_monitor_checks(self):
@@ -129,6 +130,8 @@ class MasterSchedule(object):
                 self._running = True
 
                 while self._running:
+                    # TODO: Deduplicate monitors when delayed
+
                     delay = self._schedule.run(blocking=False)
                     logging.debug("We have {0} seconds until next event...".format(delay))
 
@@ -142,11 +145,12 @@ class MasterSchedule(object):
                         else:
                             worst_mon = mon
 
-                    if worst_mon['ref'].last_status == BaseItem.WARNING:
-                        self.invoke_warning(worst_mon)
-                    elif worst_mon['ref'].last_status == BaseItem.CRITICAL:
-                        self.invoke_critical(worst_mon)
-                        continue
+                    if worst_mon:
+                        if worst_mon['ref'].last_status == BaseItem.WARNING:
+                            self.invoke_warning(worst_mon)
+                        elif worst_mon['ref'].last_status == BaseItem.CRITICAL:
+                            self.invoke_critical(worst_mon)
+                            continue
 
                     # NOTE: no current action for invalid statuses, I'm just assuming the
                     # check is knackered and can be rerun but this may not be optimal
@@ -154,7 +158,7 @@ class MasterSchedule(object):
                     time_spent = time.time() - time_start
 
                     # We spent too long handling monitor states
-                    if time_spent > delay:
+                    if time_spent >= delay:
                         continue
                     else:
                         time.sleep(delay - time_spent)
@@ -265,28 +269,33 @@ class MasterSchedule(object):
         logging.debug("Got item {0}".format(item))
         config = item['conf']
         timings = []
-        arguments = {'name': None}
+
+        # NOTE: Copy this before changing, or when passing!
+        arguments = {
+            'name': 'check',
+        }
 
         if 'repeat' in config:
             dt = start + timedelta(minutes=int(config['repeat']))
-            arguments['name'] = 'check'
 
             while dt <= until:
                 timings.append([dt, item['ref'].action, arguments])
                 dt = dt + timedelta(minutes=int(config['repeat']))
         elif 'start' in config and 'end' in config:
-            arguments['name'] = 'start'
+            se_args = arguments.copy()
+            se_args['repeating'] = None
+            se_args['name'] = 'start'
             dt_start = self._process_absolute_time(config['start'], start, until)
             if dt_start:
-                timings.append([dt_start, item['ref'].action, arguments.copy()])
+                timings.append([dt_start, item['ref'].action, se_args.copy()])
 
-                arguments['name'] = 'end'
+                se_args['name'] = 'end'
                 dt_end = self._process_absolute_time(config['end'], start, until)
-                timings.append([dt_end, item['ref'].action, arguments.copy()])
+                timings.append([dt_end, item['ref'].action, se_args.copy()])
 
                 if 'check_interval' in config:
                     dt = dt_start + timedelta(minutes=int(config['check_interval']))
-                    arguments['name'] = 'check'
+
                     while dt < dt_end:
                         timings.append([dt, item['ref'].action, arguments])
                         dt += timedelta(minutes=int(config['check_interval']))
