@@ -20,6 +20,8 @@ prototype:
 - TODO: Implement direct comms between two modems for file transfer: 
     XModem over pyserial example - https://stackoverflow.com/questions/1834247/can-i-use-the-xmodem-protocol-with-pyserial
 
+- TODO: Support several modems (Modem is currently a singleton)
+
 ### Development environment
 
 You will need Python v3.4 installed, use `make altinstall` to

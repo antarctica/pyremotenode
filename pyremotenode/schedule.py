@@ -60,6 +60,11 @@ class MasterSchedule(object):
 
         self.init()
 
+    def get_config(self, item):
+        if item not in self._cfg:
+            raise KeyError("Attempt to access non-existent configuration section")
+        return self._cfg[item]
+
     def init(self):
         self._check_thread()
         self._configure_signals()

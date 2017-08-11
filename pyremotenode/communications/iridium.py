@@ -10,6 +10,8 @@ __all__ = [
 class IridiumComms(BaseComms):
     def __init__(self, *args, **kwargs):
         BaseComms.__init__(self, *args, **kwargs)
+        modem_args = self._scheduler.get_config('modem')
+        self._modem = Modem(**modem_args)
 
 
 class RudicsComms(IridiumComms):
