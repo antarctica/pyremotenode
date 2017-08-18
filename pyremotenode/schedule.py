@@ -288,7 +288,6 @@ class MasterSchedule(object):
                 dt = dt + timedelta(minutes=int(config['repeat']))
         elif 'start' in config and 'end' in config:
             se_args = arguments.copy()
-            se_args['repeating'] = None
             se_args['name'] = 'start'
             dt_start = self._process_absolute_time(config['start'], start, until)
             if dt_start:

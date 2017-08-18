@@ -27,6 +27,7 @@ class BaseComms(BaseItem):
         raise NotImplementedError
 
 
+# TODO: Locking
 # TODO: We should handle multiple modems, this singleton is a hard limit on functionality
 class Modem(object):
     class __Modem:
@@ -65,7 +66,7 @@ class Modem(object):
             except serial.SerialException as e:
                 raise CommsRunError('Failed to initialise modem: "{}"; {}'.format(self._data.port, str(e)))
 
-        def send_receive_messages(self  , message):
+        def send_receive_messages(self, message):
             if not self._data.isOpen():
                 raise CommsRunError('Cannot send message; data port is not open')
             self._data.flushInput()
@@ -74,7 +75,7 @@ class Modem(object):
             logging.debug('Message sent: "{}"'.format(message.strip()))
             reply = self._data.readline().decode('latin-1')
             logging.debug('Message received: "{}"'.format(reply.strip()))
-            return reply
+            return reply.strip()
 
         def disconnect(self):
             if self._data.isOpen():

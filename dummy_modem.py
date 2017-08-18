@@ -37,14 +37,18 @@ class DummyModem(object):
             raise SocatException(self._socat.communicate(timeout=10))
 
         self._thread = Thread(target=self.run)
-        self._thread.run()
+        self._thread.start()
 
     def run(self):
-        input = self._socat.stdin
+        stdin = self._socat.stdin
 
         with self._socat:
-            for output in self._socat.stdout:
-                logging.debug(output)
+            for stdout in self._socat.stdout:
+                logging.debug(stdout)
+
+    def stop(self):
+        self._socat.terminate()
+
 
 class SocatException(Exception):
     pass
@@ -59,8 +63,13 @@ if __name__ == '__main__':
     dm.start()
 
     quit = False
+
+    logging.info("At any time type 'quit' to finish the program...")
+
     while dm.get_thread().is_alive() and not quit:
-        command = input("Command: ")
+        command = input()
         quit = True if re.match(r'quit', command) else False
+
+        if quit: dm.stop()
 
     log.info("Gracefully stopped using the dummy modem!")
