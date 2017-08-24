@@ -281,7 +281,8 @@ class MasterSchedule(object):
         }
 
         if 'repeat' in config:
-            dt = start + timedelta(minutes=int(config['repeat']))
+            # TODO: Need option to specify when to start repeat period?
+            dt = start
 
             while dt <= until:
                 timings.append([dt, item['ref'].action, arguments])

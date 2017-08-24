@@ -29,7 +29,7 @@ class DummyModem(object):
 
     def start(self):
         logging.info("Starting dummy modem at {}".format(self._location))
-        self._socat = Popen([ "socat", "pty,link={}".format(self._location), "stdout" ],
+        self._socat = Popen([ "socat", "pty,echo=0,link={},raw".format(self._location), "-" ],
                             stdin=PIPE, stdout=PIPE,
                             universal_newlines=True, bufsize=1)
 
@@ -44,7 +44,19 @@ class DummyModem(object):
 
         with self._socat:
             for stdout in self._socat.stdout:
-                logging.debug(stdout)
+                response = None
+                stdout = stdout.strip()
+
+                logging.debug("Received: {}".format(stdout))
+
+                sbd = re.match(r'AT\+SBDW([B])=(\d+)', stdout)
+                if sbd:
+                    response = "READY\r\n"
+
+                if response:
+                    logging.debug("Sending {}".format(response))
+                    stdin.write(response)
+                    stdin.flush()
 
     def stop(self):
         self._socat.terminate()

@@ -184,7 +184,7 @@ class SbdSendComms(IridiumComms):
 
         msg_bytes = message.encode("latin-1")
         msg_checksum = self._sbd_checksum(msg_bytes)
-        msg_isu_store = "AT+SBDWB={}".format(len(msg_bytes))
+        msg_isu_store = "AT+SBDWB={}\n".format(len(msg_bytes))
 
         logging.debug("Sending SBD message")
 
@@ -223,5 +223,5 @@ class SbdSendComms(IridiumComms):
             total += b
 
         chksum = total & 0xFFFF
-        return bytes(chksum)
+        return chksum
 
