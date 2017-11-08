@@ -7,15 +7,27 @@ from pyremotenode.base import BaseItem
 class BaseComms(BaseItem):
     def __init__(self, *args, **kwargs):
         BaseItem.__init__(self, *args, **kwargs)
+        self.last_status = BaseItem.INVALID
 
     def action(self, name):
         logging.debug("Initiating item action: {0}".format(name))
 
+        # NOTE: return does not work with sched, we need to hold / deal with state against the object
         if name == 'start':
-            return self.start()
+            if self.start():
+                self.last_status = BaseItem.OK
+            else:
+                self.last_status = BaseItem.CRITICAL
         elif name == 'end':
-            return self.stop()
-        return self.ready()
+            if self.stop():
+                self.last_status = BaseItem.INVALID
+            else:
+                self.last_status = BaseItem.WARNING
+
+        if self.ready():
+            self.last_status = BaseItem.OK
+        else:
+            self.last_status = BaseItem.CRITICAL
 
     def start(self):
         raise NotImplementedError

@@ -141,7 +141,7 @@ class MasterSchedule(object):
                     logging.debug("We have {0} seconds until next event...".format(delay))
 
                     time_start = time.time()
-
+                    
                     worst_mon = None
 
                     for mon in self._monitors:

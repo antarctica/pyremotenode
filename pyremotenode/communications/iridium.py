@@ -33,6 +33,13 @@ class RudicsComms(IridiumComms):
         self._device = device
         self.re_ifip = re.compile(r'\s*inet \d+\.\d+\.\d+\.\d+')
         self._interface_path = os.path.join(os.sep, "proc", "sys", "net", "ipv4", "conf", self._device)
+        self._proc = None
+
+        # TODO: Grab from configuration
+        self._max_checks = 3
+        self._check_interval = 1
+        self._wait_to_stop = 3
+        self._max_kill_tries = 3
 
     def start(self):
         """
@@ -44,7 +51,7 @@ class RudicsComms(IridiumComms):
         # Check whether we have the required interface
         logging.debug("Start comms, first checking for interface at {0}".format(self._interface_path))
 
-        if self.is_ready():
+        if self.ready():
             logging.info("We have a ready to go {0} interface".format(self._device))
             # TODO: Get process for control if not currently registered (would be odd)
             return True
@@ -55,7 +62,7 @@ class RudicsComms(IridiumComms):
                 rechecks = 1
                 # Validate the connectivity
 
-                while not self.is_ready() \
+                while not self.ready() \
                         and rechecks <= self._max_checks:
                     logging.debug("We have yet to get an interface up on check {0} of {1}".format(rechecks, self._max_checks))
                     # TODO: This needs threading
@@ -63,7 +70,7 @@ class RudicsComms(IridiumComms):
                     rechecks += 1
 
                 if rechecks == self._max_checks \
-                        and not self.is_ready():
+                        and not self.ready():
                     logging.error("We have failed to bring up the {0} interface".format(self._device))
                     return False
 
@@ -90,7 +97,7 @@ class RudicsComms(IridiumComms):
         if self._proc:
             logging.info("Terminating process with PID {0}".format(self._proc.pid))
             self._proc.terminate()
-            del self._proc
+            self._proc = None
             time.sleep(self._wait_to_stop)
         self._terminate_wvdial()
 
