@@ -2,130 +2,52 @@ import importlib
 import logging
 import os
 import pkgutil
-import sched
 import signal
 import sys
-import time
 
-from datetime import datetime, timedelta
+import pyremotenode
 
-import pyremotenode.communications
-import pyremotenode.invocations
-import pyremotenode.monitor
-from pyremotenode.base import BaseItem, ScheduleConfigurationError, ScheduleRunError
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import date, datetime, time, timedelta
 from pyremotenode.utils.system import pid_file
-
+from pytz import utc
 
 PID_FILE = os.path.join(os.sep, "tmp", "{0}.pid".format(__name__))
 
 
-class MasterSchedule(object):
+class Scheduler(object):
     """
         Master scheduler, MUST be run via the main thread
         Doesn't necessarily needs to be a singleton though, just only one starts at a time...
-
-        TODO (to evaluate OR implement):
-            - mutual exclusion is currently the responsibility of implementations
-            - defer monitor events that run past time - thus avoiding multiple invocations of handlers
-            - handler identification - one invocation per monitor in warning / critical scenarios!
     """
 
-    PRIORITY_IMMEDIATE = 1
-    PRIORITY_SCHEDULE = 2
-    PRIORITY_MONITOR = 3
-    PRIORITY_COMMUNICATE = 4
-    PRIORITY_GENERIC = 5
-    PRIORITY_OTHER = 99
-
-    start_when_fail = False
-
     def __init__(self, configuration,
-                 start_when_fail=start_when_fail):
+                 start_when_fail=False):
         logging.debug("Creating scheduler")
         self._cfg = configuration
 
-        self.start_when_fail = start_when_fail
-
         self._running = False
+        self._start_when_fail = start_when_fail
 
+        self._schedule = BackgroundScheduler(timezone=utc)
         self._schedule_events = []
-        self._communicators = []
-        self._monitors = []
-        self._invocations = []
-
-        self._schedule = sched.scheduler(
-            timefunc=time.time,
-            delayfunc=time.sleep)
-        self._next_schedule_task_id = None
 
         self.init()
 
-    def get_config(self, item):
-        if item not in self._cfg:
-            raise KeyError("Attempt to access non-existent configuration section")
-        return self._cfg[item]
-
     def init(self):
-        self._check_thread()
         self._configure_signals()
-        self._configure_monitors()
+#        self._configure_tasks()
 
-        if self.start_when_fail or self.initial_monitor_checks():
-            self._configure_communicators()
+        if self._start_when_fail or self.initial_checks():
             self._plan_schedule()
         else:
-            # TODO: Sleep!
             raise ScheduleRunError("Failed on an unhealthy initial check, avoiding scheduler startup...")
 
-    def initial_monitor_checks(self):
-        for mon in self._monitors:
-            if mon['ref'].monitor() != BaseItem.OK:
-                return False
+    def initial_checks(self):
+        for action in ['on_start' in cfg and cfg['on_start'] for cfg in self._cfg['actions']]:
+            # TODO: How do we execute arbitary actions via the same mechanism as apscheduler?
+            pass
         return True
-
-    def invoke_warning(self, item):
-        """
-        Use this to schedule warning invocation tasks from monitors, this will directly
-        affect the schedule...
-        :return:
-        """
-
-        # TODO: What's our behaviour in this situation (cancel comms to prioritise messaging!?!)
-        self.invoke(item['conf'], key='warn', priority=MasterSchedule.PRIORITY_IMMEDIATE)
-
-    def invoke_critical(self, item):
-        """
-        User this to schedule critical invocation tasks from monitors
-        :return:
-        """
-
-        self._wipe_schedule()
-        # We should now have an empty list, schedule the critical invocation
-        self.invoke(item['conf'], key='crit', priority=MasterSchedule.PRIORITY_IMMEDIATE)
-
-    def invoke(self, cfg,
-               key='invoke', future=0, priority=PRIORITY_GENERIC):
-        """
-        This can be called (internally or externally) to schedule items
-        either immediately (default) or in the future
-        :param cfg:
-        :param key:
-        :param future:
-        :param priority:
-        :return:
-        """
-
-        obj = InvocationsItemFactory.get_item(cfg[key], **cfg["{}_args".format(key)])
-        action_args = {}
-
-        evt = self._schedule.enterabs(
-            time=datetime.now().timestamp() + future,
-            action=obj.action,
-            priority=priority,
-            kwargs=action_args
-        )
-        # TODO: Link / group invocations together, especially for communications, reduce conflicts of ongoing events
-        self._invocations.append(evt)
 
     def run(self):
         logging.info("Starting scheduler")
@@ -133,80 +55,30 @@ class MasterSchedule(object):
         try:
             with pid_file(PID_FILE):
                 self._running = True
-
-                while self._running:
-                    # TODO: Deduplicate monitors when delayed
-
-                    delay = self._schedule.run(blocking=False)
-                    logging.debug("We have {0} seconds until next event...".format(delay))
-
-                    time_start = time.time()
-                    
-                    worst_mon = None
-
-                    for mon in self._monitors:
-                        if worst_mon and mon['ref'].last_status > worst_mon['ref'].last_status:
-                            worst_mon = mon
-                        else:
-                            worst_mon = mon
-
-                    if worst_mon:
-                        if worst_mon['ref'].last_status == BaseItem.WARNING:
-                            self.invoke_warning(worst_mon)
-                        elif worst_mon['ref'].last_status == BaseItem.CRITICAL:
-                            self.invoke_critical(worst_mon)
-                            continue
-
-                    # NOTE: no current action for invalid statuses, I'm just assuming the
-                    # check is knackered and can be rerun but this may not be optimal
-
-                    time_spent = time.time() - time_start
-
-                    # We spent too long handling monitor states
-                    if time_spent >= delay:
-                        continue
-                    else:
-                        time.sleep(delay - time_spent)
+                self._schedule.start()
         finally:
             if os.path.exists(PID_FILE):
                 os.unlink(PID_FILE)
 
     def stop(self):
         self._running = False
+        # TODO: Check shutdown process
+        self._schedule.shutdown()
 
-    ################################
+    # ==================================================================================
 
-    def _check_thread(self):
-        """
-            TODO: Checks scheduler is running in the main execution thread
-        """
-        pass
-
-    def _configure_communicators(self):
-        logging.info("Configuring communicators")
-
-        for idx, comm in enumerate(self._cfg['communications']):
-            comm['args']['scheduler'] = self
-            logging.debug("Configuring communicator {0}: type {1}".format(idx, comm['type']))
-            obj = CommunicationsItemFactory.get_item(comm['type'], **comm['args'])
-            self._communicators.append({
-                'conf': comm,
-                'events': [],
-                'ref': obj
-            })
-
-    def _configure_monitors(self):
-        logging.info("Configuring monitors")
-
-        for idx, monitor in enumerate(self._cfg['monitor']):
-            monitor['args']['scheduler'] = self
-            logging.debug("Configuring monitor {0}: type {1}".format(idx, monitor['type']))
-            obj = MonitorItemFactory.get_item(monitor['type'], **monitor['args'])
-            self._monitors.append({
-                'conf': monitor,
-                'events': [],
-                'ref': obj
-            })
+#    def _configure_tasks(self):
+#        logging.info("Configuring tasks from defined actions")
+#
+#        for idx, cfg in enumerate(self._cfg['actions']):
+#            cfg['args']['scheduler'] = self
+#            logging.debug("Configuring task {0}: type {1}".format(idx, cfg['type']))
+#            obj = TaskItemFactory.get_item(cfg['type'], **cfg['args'])
+#            self._tasks[cfg['id']] = {
+#                'conf': cfg,
+#                'events': [],
+#                'ref': obj
+#            }
 
     def _configure_signals(self):
         signal.signal(signal.SIGTERM, self._sig_handler)
@@ -228,135 +100,162 @@ class MasterSchedule(object):
             logging.error("Too long until next schedule: {0}".format(remaining))
             sys.exit(1)
 
-        # TODO: Clear the event records from previous plans
-        #       - this involves sorting the Event objects, as per the heap queue
-        #         then popping them out of the arrays until only valid items are left
+        self._schedule.remove_all_jobs()
 
-        evt = self._schedule.enterabs(
-            time=next_schedule.timestamp(),
-            action=self._plan_schedule,
-            priority=1,
-        )
-        self._schedule_events.append(evt)
+        job = self._schedule.add_job(self._plan_schedule,
+                                     id='next_schedule',
+                                     next_run_time=next_schedule,
+                                     replace_existing=True)
 
-        self._process_schedule_items(reference, next_schedule, self._monitors, MasterSchedule.PRIORITY_MONITOR)
-        self._process_schedule_items(reference, next_schedule, self._communicators, MasterSchedule.PRIORITY_COMMUNICATE)
+        self._schedule_events.append(job)
 
-    def _process_absolute_time(self, timestr, start, until):
-        (hour, minute) = (int(timestr[:2]), int(timestr[2:]))
-        dt = start.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        self._plan_schedule_tasks(reference, next_schedule)
 
-        if dt < start:
-            dt = dt + timedelta(days=1)
+    def _plan_schedule_tasks(self, start, until):
+        # TODO: grace period for datetime.now()
+        start = datetime.now()
 
-        if dt > until or dt < start:
-            logging.warning("{0} configuration start time does not fall between {1} and {2}".format(
-                timestr, start, until))
-            return None
-
-        return dt
-
-    def _process_schedule_items(self, start, until, items, priority = PRIORITY_OTHER):
         try:
-            for item in items:
-                for (dt, action, action_args) in self._process_item_timing(start, until, item):
-                    evt = self._schedule.enterabs(
-                        time=dt.timestamp(),
-                        action=action,
-                        priority=priority,
-                        kwargs=action_args
-                    )
-                    item['events'].append(evt)
+            for idx, cfg in enumerate(self._cfg['actions']):
+                action = SchedulerAction(cfg)
+                self._plan_schedule_task(start, until, action)
+                # TODO: CURRENT - Update for apscheduler
         except:
             raise ScheduleConfigurationError
 
-    def _process_item_timing(self, start, until, item):
-        logging.debug("Got item {0}".format(item))
-        config = item['conf']
+    def _plan_schedule_task(self, start, until, action):
+        logging.debug("Got item {0}".format(action))
         timings = []
+        datetime_args = ('date','time')
+        cron_args = ('year','minute','day','week','day_of_week','hour','minute','second')
 
         # NOTE: Copy this before changing, or when passing!
-        arguments = {
-            'name': 'check',
-        }
+        arguments = {}
 
-        if 'repeat' in config:
-            # TODO: Need option to specify when to start repeat period?
-            dt = start
+        if 'interval' in action:
+            logging.debug("Scheduling interval based job")
 
-            while dt <= until:
-                timings.append([dt, item['ref'].action, arguments])
-                dt = dt + timedelta(minutes=int(config['repeat']))
-        elif 'start' in config and 'end' in config:
-            se_args = arguments.copy()
-            se_args['name'] = 'start'
-            dt_start = self._process_absolute_time(config['start'], start, until)
-            if dt_start:
-                timings.append([dt_start, item['ref'].action, se_args.copy()])
+            self._schedule.add_job(action['action'],
+                                   id=action['action'],
+                                   trigger='interval',
+                                   minutes=action['interval'],
+                                   coalesce=True,
+                                   max_instances=1)
+        elif 'date' in action or 'time' in action:
+            logging.debug("Scheduling standard job")
 
-                se_args['name'] = 'end'
-                dt_end = self._process_absolute_time(config['end'], start, until)
-                timings.append([dt_end, item['ref'].action, se_args.copy()])
+            dt = Scheduler.parse_datetime(action['date'], action['time'])
+            self._schedule.add_job(action['action'],
+                                   id=action['action'],
+                                   trigger='date',
+                                   coalesce=True,
+                                   max_instances=1,
+                                   run_date=dt)
+        elif any(k in cron_args for k in action.keys()):
+            logging.debug("Scheduling cron style job")
 
-                if 'check_interval' in config:
-                    dt = dt_start + timedelta(minutes=int(config['check_interval']))
-
-                    while dt < dt_end:
-                        timings.append([dt, item['ref'].action, arguments])
-                        dt += timedelta(minutes=int(config['check_interval']))
-            else:
-                logging.debug("No available start time could be determined so not scheduling events for this item")
+            job_args = dict([(k, action[k]) for k in cron_args])
+            self._schedule.add_job(action['action'],
+                                   id=action['action'],
+                                   trigger='cron',
+                                   coalesce=True,
+                                   max_instances=1,
+                                   *job_args)
         else:
             logging.error("No compatible timing schedule present for this configuration")
             raise ScheduleConfigurationError
 
         return timings
 
+    @staticmethod
+    def parse_datetime(date_str, time_str):
+        logging.debug("Parsing date: {} and time: {}".format(date_str, time_str))
+
+        try:
+            if time_str is not None:
+                tm = datetime.strptime(time_str, "%H%M").time()
+            else:
+                # TODO: Make this sit within the operational window for the day in question
+                tm = time(12)
+
+            if date_str is not None:
+                dt = datetime.strptime(date_str, "%d%m%y").date()
+            else:
+                dt = datetime.today().date()
+        except ValueError:
+            raise ScheduleConfigurationError("Date: {} Time: {} not valid in configuration file".format(date_str,
+                                                                                                        time_str))
+
+        return datetime.combine(dt, tm)
+
     def _sig_handler(self, sig, stack):
         logging.debug("Signal handling {0} at frame {1}".format(sig, stack.f_code))
         self.stop()
 
-    def _wipe_schedule(self):
-        for item in self._communicators:
-            item['ref'].action('stop')
 
-        for event in self._invocations + self._schedule_events + \
-                [items['events'] for items in self._communicators + self._monitors]:
-            if event in self._schedule.queue:
-                self._schedule.cancel(event)
+class BaseTask(object):
+    OK = 0
+    WARNING = 1
+    CRITICAL = 2
+    INVALID = -1
 
+    def __init__(self, scheduler, *args, **kwargs):
+        self._scheduler = scheduler
 
-class ScheduleItemFactory(object):
-    @classmethod
-    def get_item(cls, package, type, *args, **kwargs):
-        klass_name = ScheduleItemFactory.get_klass_name(type)
-
-        for mod in pkgutil.walk_packages(package.__path__):
-            imported = importlib.import_module(".".join([package.__name__, mod[1]]))
-            if hasattr(imported, klass_name):
-                return getattr(imported, klass_name)(*args, **kwargs)
-
-        logging.error("No class named {0} found".format(klass_name))
-        raise ReferenceError
-
-    @classmethod
-    def get_klass_name(cls, name):
-        return "".join([seg.capitalize() for seg in name.split("_")])
+    def check(self, name):
+        raise NotImplementedError
 
 
-class CommunicationsItemFactory(ScheduleItemFactory):
-    @classmethod
-    def get_item(cls, type, *args, **kwargs):
-        return ScheduleItemFactory.get_item(pyremotenode.communications, type, *args, **kwargs)
+class SchedulerAction(object):
+    def __init__(self, action_config):
+        self._cfg = action_config
+
+    def __setitem__(self, key, value):
+        self._cfg[key] = value
+
+    def __getitem__(self, key):
+        try:
+            return self._cfg[key]
+        except KeyError:
+            return None
+
+    def __iter__(self):
+        self.__iter = iter(self._cfg)
+        return iter(self._cfg)
+
+    def __next__(self):
+        return self.__iter.next()
 
 
-class InvocationsItemFactory(ScheduleItemFactory):
-    @classmethod
-    def get_item(cls, type, *args, **kwargs):
-        return ScheduleItemFactory.get_item(pyremotenode.invocations, type, *args, **kwargs)
 
 
-class MonitorItemFactory(ScheduleItemFactory):
-    @classmethod
-    def get_item(cls, type, *args, **kwargs):
-        return ScheduleItemFactory.get_item(pyremotenode.monitor, type, *args, **kwargs)
+class ScheduleRunError(Exception):
+    pass
+
+
+class ScheduleConfigurationError(Exception):
+    pass
+
+
+# class ScheduleItemFactory(object):
+#     @classmethod
+#     def get_item(cls, package, type, *args, **kwargs):
+#         klass_name = ScheduleItemFactory.get_klass_name(type)
+# # 
+#         for mod in pkgutil.walk_packages(package.__path__):
+#             imported = importlib.import_module(".".join([package.__name__, mod[1]]))
+#             if hasattr(imported, klass_name):
+#                 return getattr(imported, klass_name)(*args, **kwargs)
+# # 
+#         logging.error("No class named {0} found".format(klass_name))
+#         raise ReferenceError
+# # 
+#     @classmethod
+#     def get_klass_name(cls, name):
+#         return "".join([seg.capitalize() for seg in name.split("_")])
+# # 
+# 
+# class TaskItemFactory(ScheduleItemFactory):
+#     @classmethod
+#     def get_item(cls, type, *args, **kwargs):
+#         return ScheduleItemFactory.get_item(pyremotenode.tasks, type, *args, **kwargs)

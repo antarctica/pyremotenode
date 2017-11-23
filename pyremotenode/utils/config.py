@@ -9,8 +9,7 @@ DATA_KEYS=(
 )
 
 ARRAY_SECTIONS=(
-    'communications',
-    'monitor',
+    'actions',
 )
 
 
@@ -25,7 +24,7 @@ class Configuration(object):
             self.parse()
 
         def parse(self):
-            ini = configparser.ConfigParser()
+            ini = configparser.ConfigParser(delimiters=['='])
             ini.read(self._path)
 
             # TODO: ini.defaults().items()
@@ -55,7 +54,7 @@ class Configuration(object):
             if key and re.sub(r'[0-9]$', '', key) in DATA_KEYS:
                 force = True
 
-            split_data = re.split(r'\s*[=:{0}]\s*'.format(os.linesep), value.strip(), flags=re.MULTILINE)
+            split_data = re.split(r'\s*[={0}]\s*'.format(os.linesep), value.strip(), flags=re.MULTILINE)
 
             if len(split_data) <= 1 and not force:
                 return value

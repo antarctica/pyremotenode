@@ -1,6 +1,3 @@
-from pyremotenode.schedule import MasterSchedule
+from pyremotenode.schedule import Scheduler, BaseTask
 
-__all__ = [MasterSchedule]
-
-
-
+__all__ = ["Scheduler", "BaseTask"]

@@ -1,7 +1,7 @@
 import argparse
 import logging
 
-from pyremotenode import MasterSchedule
+from pyremotenode.schedule import Scheduler
 from pyremotenode.utils import Configuration, setup_logging
 
 log = setup_logging(__name__)
@@ -17,6 +17,6 @@ if __name__ == '__main__':
 
     cfg = Configuration(args.config).config
 
-    m = MasterSchedule(cfg,
-                       start_when_fail=args.start_when_fail)
+    m = Scheduler(cfg,
+                  start_when_fail=args.start_when_fail)
     m.run()
