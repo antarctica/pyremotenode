@@ -39,7 +39,7 @@ class Scheduler(object):
 
     def init(self):
         self._configure_signals()
-        #self._configure_tasks()
+        self._configure_instances()
 
         if self._start_when_fail or self.initial_checks():
             self._plan_schedule()
@@ -78,18 +78,13 @@ class Scheduler(object):
 
     # ==================================================================================
 
-    def _configure_tasks(self):
+    def _configure_instances(self):
         logging.info("Configuring tasks from defined actions")
 
         for idx, cfg in enumerate(self._cfg['actions']):
-            logging.debug("Configuring action instance {0}: type {1}".format(idx, cfg['action']))
-            obj = ActionItemFactory.get_item(cfg['action'])
-            self._schedule_action_instances[cfg['action']] = obj
-#            self._tasks[cfg['id']] = {
-#                'conf': cfg,
-#                'events': [],
-#                'ref': obj
-#            }
+            logging.debug("Configuring action instance {0}: type {1}".format(idx, cfg['task']))
+            obj = TaskInstanceFactory.get_item(task=cfg['task'], **cfg['args'])
+            self._schedule_action_instances[cfg['task']] = obj
 
     def _configure_signals(self):
         signal.signal(signal.SIGTERM, self._sig_handler)
@@ -140,26 +135,19 @@ class Scheduler(object):
         cron_args = ('year','minute','day','week','day_of_week','hour','minute','second')
 
         # NOTE: Copy this before changing, or when passing!
-        args = (action['action'])
         kwargs = action['args']
 
-        #func = self._schedule_action_instances[action['action']]
-        class_ = getattr(pyremotenode.tasks, action['action'])
-        if 'action' in kwargs and hasattr(class_, kwargs['action']):
-            func = getattr(class_, kwargs['action'])
-        else:
-            func = getattr(class_, 'default_action')
+        obj = self._schedule_action_instances[action['task']]
 
         if 'interval' in action:
             logging.debug("Scheduling interval based job")
 
-            self._schedule.add_job(func,
+            self._schedule.add_job(obj,
                                    id=action['id'],
                                    trigger='interval',
                                    minutes=int(action['interval']),
                                    coalesce=True,
                                    max_instances=1,
-                                   args=args,
                                    kwargs=kwargs)
         elif 'date' in action or 'time' in action:
             logging.debug("Scheduling standard job")
@@ -169,25 +157,23 @@ class Scheduler(object):
             if datetime.now() > dt:
                 logging.info("Job ID: {} does not need to be scheduled as it is prior to current time".format(action['id']))
             else:
-                self._schedule.add_job(func,
+                self._schedule.add_job(obj,
                                        id=action['id'],
                                        trigger='date',
                                        coalesce=True,
                                        max_instances=1,
                                        run_date=dt,
-                                       args=args,
                                        kwargs=kwargs)
         elif any(k in cron_args for k in action.keys()):
             logging.debug("Scheduling cron style job")
 
             job_args = dict([(k, action[k]) for k in cron_args])
-            self._schedule.add_job(func,
+            self._schedule.add_job(obj,
                                    id=action['id'],
                                    trigger='cron',
                                    coalesce=True,
                                    max_instances=1,
                                    *job_args,
-                                   args=args,
                                    kwargs=kwargs)
         else:
             logging.error("No compatible timing schedule present for this configuration")
@@ -244,13 +230,13 @@ class SchedulerAction(object):
         return self.__iter.next()
 
 
-class ActionItemFactory(object):
+class TaskInstanceFactory(object):
     @classmethod
-    def get_item(cls, action):
-        klass_name = ActionItemFactory.get_klass_name(action)
+    def get_item(cls, task, *args, **kwargs):
+        klass_name = TaskInstanceFactory.get_klass_name(task)
 
         if hasattr(pyremotenode.tasks, klass_name):
-            return getattr(pyremotenode.tasks, klass_name)()
+            return getattr(pyremotenode.tasks, klass_name)(*args, **kwargs)
 
         logging.error("No class named {0} found in pyremotenode.tasks".format(klass_name))
         raise ReferenceError
