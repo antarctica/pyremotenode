@@ -4,10 +4,12 @@ import os
 import pkgutil
 import signal
 import sys
+import time as timeutils
 
 import pyremotenode
+import pyremotenode.tasks
 
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.background import BlockingScheduler
 from datetime import date, datetime, time, timedelta
 from pyremotenode.utils.system import pid_file
 from pytz import utc
@@ -29,14 +31,15 @@ class Scheduler(object):
         self._running = False
         self._start_when_fail = start_when_fail
 
-        self._schedule = BackgroundScheduler(timezone=utc)
+        self._schedule = BlockingScheduler(timezone=utc)
         self._schedule_events = []
+        self._schedule_action_instances = {}
 
         self.init()
 
     def init(self):
         self._configure_signals()
-#        self._configure_tasks()
+        #self._configure_tasks()
 
         if self._start_when_fail or self.initial_checks():
             self._plan_schedule()
@@ -55,7 +58,15 @@ class Scheduler(object):
         try:
             with pid_file(PID_FILE):
                 self._running = True
+
+                self._schedule.print_jobs()
                 self._schedule.start()
+
+                # TODO: BackgroundScheduler?
+                #while self._running:
+                #    logging.debug("Scheduler sleeping")
+                #    timeutils.sleep(10)
+                #    # TODO: Check for configurations / updates
         finally:
             if os.path.exists(PID_FILE):
                 os.unlink(PID_FILE)
@@ -67,13 +78,13 @@ class Scheduler(object):
 
     # ==================================================================================
 
-#    def _configure_tasks(self):
-#        logging.info("Configuring tasks from defined actions")
-#
-#        for idx, cfg in enumerate(self._cfg['actions']):
-#            cfg['args']['scheduler'] = self
-#            logging.debug("Configuring task {0}: type {1}".format(idx, cfg['type']))
-#            obj = TaskItemFactory.get_item(cfg['type'], **cfg['args'])
+    def _configure_tasks(self):
+        logging.info("Configuring tasks from defined actions")
+
+        for idx, cfg in enumerate(self._cfg['actions']):
+            logging.debug("Configuring action instance {0}: type {1}".format(idx, cfg['action']))
+            obj = ActionItemFactory.get_item(cfg['action'])
+            self._schedule_action_instances[cfg['action']] = obj
 #            self._tasks[cfg['id']] = {
 #                'conf': cfg,
 #                'events': [],
@@ -126,41 +137,58 @@ class Scheduler(object):
     def _plan_schedule_task(self, start, until, action):
         logging.debug("Got item {0}".format(action))
         timings = []
-        datetime_args = ('date','time')
         cron_args = ('year','minute','day','week','day_of_week','hour','minute','second')
 
         # NOTE: Copy this before changing, or when passing!
-        arguments = {}
+        args = (action['action'])
+        kwargs = action['args']
+
+        #func = self._schedule_action_instances[action['action']]
+        class_ = getattr(pyremotenode.tasks, action['action'])
+        if 'action' in kwargs and hasattr(class_, kwargs['action']):
+            func = getattr(class_, kwargs['action'])
+        else:
+            func = getattr(class_, 'default_action')
 
         if 'interval' in action:
             logging.debug("Scheduling interval based job")
 
-            self._schedule.add_job(action['action'],
-                                   id=action['action'],
+            self._schedule.add_job(func,
+                                   id=action['id'],
                                    trigger='interval',
-                                   minutes=action['interval'],
+                                   minutes=int(action['interval']),
                                    coalesce=True,
-                                   max_instances=1)
+                                   max_instances=1,
+                                   args=args,
+                                   kwargs=kwargs)
         elif 'date' in action or 'time' in action:
             logging.debug("Scheduling standard job")
 
             dt = Scheduler.parse_datetime(action['date'], action['time'])
-            self._schedule.add_job(action['action'],
-                                   id=action['action'],
-                                   trigger='date',
-                                   coalesce=True,
-                                   max_instances=1,
-                                   run_date=dt)
+
+            if datetime.now() > dt:
+                logging.info("Job ID: {} does not need to be scheduled as it is prior to current time".format(action['id']))
+            else:
+                self._schedule.add_job(func,
+                                       id=action['id'],
+                                       trigger='date',
+                                       coalesce=True,
+                                       max_instances=1,
+                                       run_date=dt,
+                                       args=args,
+                                       kwargs=kwargs)
         elif any(k in cron_args for k in action.keys()):
             logging.debug("Scheduling cron style job")
 
             job_args = dict([(k, action[k]) for k in cron_args])
-            self._schedule.add_job(action['action'],
-                                   id=action['action'],
+            self._schedule.add_job(func,
+                                   id=action['id'],
                                    trigger='cron',
                                    coalesce=True,
                                    max_instances=1,
-                                   *job_args)
+                                   *job_args,
+                                   args=args,
+                                   kwargs=kwargs)
         else:
             logging.error("No compatible timing schedule present for this configuration")
             raise ScheduleConfigurationError
@@ -179,7 +207,9 @@ class Scheduler(object):
                 tm = time(12)
 
             if date_str is not None:
-                dt = datetime.strptime(date_str, "%d%m%y").date()
+                parsed_dt = datetime.strptime(date_str, "%d%m").date()
+                year = datetime.now().year
+                dt = datetime(year=year, month=parsed_dt.month, day=parsed_dt.day)
             else:
                 dt = datetime.today().date()
         except ValueError:
@@ -191,19 +221,6 @@ class Scheduler(object):
     def _sig_handler(self, sig, stack):
         logging.debug("Signal handling {0} at frame {1}".format(sig, stack.f_code))
         self.stop()
-
-
-class BaseTask(object):
-    OK = 0
-    WARNING = 1
-    CRITICAL = 2
-    INVALID = -1
-
-    def __init__(self, scheduler, *args, **kwargs):
-        self._scheduler = scheduler
-
-    def check(self, name):
-        raise NotImplementedError
 
 
 class SchedulerAction(object):
@@ -227,6 +244,20 @@ class SchedulerAction(object):
         return self.__iter.next()
 
 
+class ActionItemFactory(object):
+    @classmethod
+    def get_item(cls, action):
+        klass_name = ActionItemFactory.get_klass_name(action)
+
+        if hasattr(pyremotenode.tasks, klass_name):
+            return getattr(pyremotenode.tasks, klass_name)()
+
+        logging.error("No class named {0} found in pyremotenode.tasks".format(klass_name))
+        raise ReferenceError
+
+    @classmethod
+    def get_klass_name(cls, name):
+        return name.split(":")[-1]
 
 
 class ScheduleRunError(Exception):
