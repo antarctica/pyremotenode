@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 
 from pyremotenode.schedule import Scheduler
 from pyremotenode.utils import Configuration, setup_logging
@@ -13,8 +14,12 @@ if __name__ == '__main__':
     a = argparse.ArgumentParser()
     a.add_argument("config", help="Configuration to use for running remote node",
                    type=Configuration.check_file)
+    # TODO: Naming of service as a parameter...
     a.add_argument("--start-when-fail", "-s", help="Start even if initial monitor checks fail",
                    action="store_true", default=False)
+    # TODO: Needs to be married up to the pid file management
+    a.add_argument("--pidfile", "-p", help="PID file to manage for service operations",
+                   default=os.path.join(os.sep, "var", "run", "{0}.pid".format(__name__)))
     args = a.parse_args()
 
     cfg = Configuration(args.config).config

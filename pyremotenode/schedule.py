@@ -11,6 +11,7 @@ from datetime import date, datetime, time, timedelta
 from pyremotenode.utils.system import pid_file
 from pytz import utc
 
+# TODO: Marry this up to the LSB script!
 PID_FILE = os.path.join(os.sep, "tmp", "{0}.pid".format(__name__))
 
 
