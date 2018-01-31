@@ -1,10 +1,7 @@
-import importlib
 import logging
 import os
-import pkgutil
 import signal
 import sys
-import time as timeutils
 
 import pyremotenode
 import pyremotenode.tasks
@@ -232,11 +229,12 @@ class SchedulerAction(object):
 
 class TaskInstanceFactory(object):
     @classmethod
-    def get_item(cls, task, *args, **kwargs):
+    def get_item(cls, task, **kwargs):
         klass_name = TaskInstanceFactory.get_klass_name(task)
 
         if hasattr(pyremotenode.tasks, klass_name):
-            return getattr(pyremotenode.tasks, klass_name)(*args, **kwargs)
+            # TODO: warning and critical object creation or configuration supply
+            return getattr(pyremotenode.tasks, klass_name)(**kwargs)
 
         logging.error("No class named {0} found in pyremotenode.tasks".format(klass_name))
         raise ReferenceError
@@ -256,13 +254,13 @@ class ScheduleConfigurationError(Exception):
 
 # class ScheduleItemFactory(object):
 #     @classmethod
-#     def get_item(cls, package, type, *args, **kwargs):
+#     def get_item(cls, package, type, **kwargs):
 #         klass_name = ScheduleItemFactory.get_klass_name(type)
 # # 
 #         for mod in pkgutil.walk_packages(package.__path__):
 #             imported = importlib.import_module(".".join([package.__name__, mod[1]]))
 #             if hasattr(imported, klass_name):
-#                 return getattr(imported, klass_name)(*args, **kwargs)
+#                 return getattr(imported, klass_name)(**kwargs)
 # # 
 #         logging.error("No class named {0} found".format(klass_name))
 #         raise ReferenceError
@@ -274,5 +272,5 @@ class ScheduleConfigurationError(Exception):
 # 
 # class TaskItemFactory(ScheduleItemFactory):
 #     @classmethod
-#     def get_item(cls, type, *args, **kwargs):
-#         return ScheduleItemFactory.get_item(pyremotenode.tasks, type, *args, **kwargs)
+#     def get_item(cls, type, **kwargs):
+#         return ScheduleItemFactory.get_item(pyremotenode.tasks, type, **kwargs)

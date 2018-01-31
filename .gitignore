@@ -1,3 +1,6 @@
 *.pyc
 __pycache__
 .idea/
+build/
+dist/
+pyremotenode.egg_info/

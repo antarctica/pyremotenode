@@ -11,8 +11,8 @@ RE_OUTPUT = re.compile(r'^.*(ok|warning|critical|invalid)\s*\-.+', flags=re.IGNO
 
 
 class Command(BaseTask):
-    def __init__(self, path, name=None, *args, **kwargs):
-        BaseTask.__init__(self, *args, **kwargs)
+    def __init__(self, path, name=None, **kwargs):
+        BaseTask.__init__(self, **kwargs)
         self._name = name if name else path
         self._args = [path]
         self._proc = None
@@ -22,7 +22,7 @@ class Command(BaseTask):
             self._args.append(v)
         logging.debug("Command: {0}".format(self._args))
 
-    def default_action(self, *args, **kwargs):
+    def default_action(self, **kwargs):
         logging.info("Checking command {0}".format(self._name))
         ret = None
 

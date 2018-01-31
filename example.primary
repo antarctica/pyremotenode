@@ -3,31 +3,34 @@ log_level=      DEBUG
 
 [actions]
 id1=        rudics_start
-task1=    RudicsConnection
-time1=      1430
+task1=      RudicsConnection
+time1=      0948
 args1=
     action=     start
 
 id2=        ssh_start
-task2=    SshTunnel
-time2=      0931
+task2=      SshTunnel
+time2=      0949
 args2=
     action=     start
+    address=    localhost
+    port=       22
+    user=       circadian
 
 id3=        ssh_stop
-task3=    SshTunnel
-time3=      0932
+task3=      SshTunnel
+time3=      0950
 args3=
     action=     stop
 
 id4=        rudics_stop
-task4=    RudicsConnection
-time4=      1500
+task4=      RudicsConnection
+time4=      0951
 args4=
     action=     stop
 
 id5=        get_battery_level
-task5=    Command
+task5=      Command
 interval5=  2
 args5=
     path=       get_battery_level -w 50 -c 30
@@ -41,7 +44,8 @@ crit_args3=
     until=      next_day
 
 id6=        sleep
-task6=    Sleep
-date6=      3105
+task6=      Sleep
+;date6=      3005
+time6=      0205
 args6=
     until=  0109

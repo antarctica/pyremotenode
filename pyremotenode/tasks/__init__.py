@@ -1,5 +1,6 @@
 import logging
 
+
 class TaskException(Exception):
     pass
 
@@ -10,21 +11,23 @@ class BaseTask(object):
     CRITICAL = 2
     INVALID = -1
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         pass
 
-    def __call__(self, action=None, *args, **kwargs):
+    def __call__(self, action=None, **kwargs):
         if not action:
             action = 'default_action'
 
         if hasattr(self, action):
             logging.debug("Calling action {} on {}".format(action, self.__class__.__name__))
+
+            ret_val = getattr(self, action)(**kwargs)
             # TODO: Here we can deal with statuses!
-            return getattr(self, action)(*args, **kwargs)
+            return ret_val
         else:
             raise TaskException("There is no {} action for the task {}!".format(action, self.__class__.__name__))
 
-    def default_action(self, *args, **kwargs):
+    def default_action(self, **kwargs):
         raise TaskException("There is no default exception defined for {}".format(self.__name__))
 
 
