@@ -20,13 +20,14 @@ class SshTunnel(BaseTask):
 
             self._re_ps_f_cmd = re.compile(r'^(?:/usr/bin/)?ssh .*[^\s]+@.+')
 
-        def start(self):
+        def start(self, **kwargs):
             logging.info("Opening AutoSSH tunnel to {0}:{1}".format(self._tunnel_address, self._tunnel_port))
             cmd = ["autossh", "-M 40000:40001",
                    "-o", "GSSAPIAuthentication=no",
                    "-o", "PasswordAuthentication=no",
                    "-o", "ServerAliveInterval=10",
                    "-o", "ServerAliveCountMax=5",
+                   "-o", "RequestTTY=no",
                    "-R", "{0}:*:22".format(self._tunnel_port),
                    "-C", "-N", "{0}@{1}".format(self._tunnel_user, self._tunnel_address),
                    ]
@@ -37,9 +38,11 @@ class SshTunnel(BaseTask):
 
             return True
 
-        def stop(self):
+        def stop(self, **kwargs):
             logging.info("Closing AutoSSH tunnel to {0}:{1}".format(self._tunnel_address, self._tunnel_port))
-            self._proc.terminate()
+            # TODO: Ensure we're killing with the correct signal (SIGTERM) as we're getting zombies...
+            if self._proc:
+                self._proc.terminate()
 
     instance = None
 

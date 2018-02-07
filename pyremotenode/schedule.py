@@ -11,7 +11,6 @@ from datetime import date, datetime, time, timedelta
 from pyremotenode.utils.system import pid_file
 from pytz import utc
 
-# TODO: Marry this up to the LSB script!
 PID_FILE = os.path.join(os.sep, "tmp", "{0}.pid".format(__name__))
 
 
@@ -22,9 +21,11 @@ class Scheduler(object):
     """
 
     def __init__(self, configuration,
-                 start_when_fail=False):
+                 start_when_fail=False,
+                 pid_file=PID_FILE):
         logging.debug("Creating scheduler")
         self._cfg = configuration
+        self._pid = pid_file
 
         self._running = False
         self._start_when_fail = start_when_fail
@@ -54,7 +55,7 @@ class Scheduler(object):
         logging.info("Starting scheduler")
 
         try:
-            with pid_file(PID_FILE):
+            with pid_file(self._pid):
                 self._running = True
 
                 self._schedule.print_jobs()
@@ -162,17 +163,18 @@ class Scheduler(object):
                                        max_instances=1,
                                        run_date=dt,
                                        kwargs=kwargs)
-        elif any(k in cron_args for k in action.keys()):
+        elif any(k in cron_args for k in action):
             logging.debug("Scheduling cron style job")
 
-            job_args = dict([(k, action[k]) for k in cron_args])
+            job_args = dict([(k, action[k]) for k in cron_args if k in action])
+            logging.debug(job_args)
             self._schedule.add_job(obj,
                                    id=action['id'],
                                    trigger='cron',
                                    coalesce=True,
                                    max_instances=1,
-                                   *job_args,
-                                   kwargs=kwargs)
+                                   kwargs=kwargs,
+                                   **job_args)
         else:
             logging.error("No compatible timing schedule present for this configuration")
             raise ScheduleConfigurationError
@@ -252,26 +254,3 @@ class ScheduleRunError(Exception):
 class ScheduleConfigurationError(Exception):
     pass
 
-
-# class ScheduleItemFactory(object):
-#     @classmethod
-#     def get_item(cls, package, type, **kwargs):
-#         klass_name = ScheduleItemFactory.get_klass_name(type)
-# # 
-#         for mod in pkgutil.walk_packages(package.__path__):
-#             imported = importlib.import_module(".".join([package.__name__, mod[1]]))
-#             if hasattr(imported, klass_name):
-#                 return getattr(imported, klass_name)(**kwargs)
-# # 
-#         logging.error("No class named {0} found".format(klass_name))
-#         raise ReferenceError
-# # 
-#     @classmethod
-#     def get_klass_name(cls, name):
-#         return "".join([seg.capitalize() for seg in name.split("_")])
-# # 
-# 
-# class TaskItemFactory(ScheduleItemFactory):
-#     @classmethod
-#     def get_item(cls, type, **kwargs):
-#         return ScheduleItemFactory.get_item(pyremotenode.tasks, type, **kwargs)

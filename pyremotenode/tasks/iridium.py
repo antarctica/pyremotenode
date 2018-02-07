@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import shlex
 import signal
 import subprocess
 import threading as t
@@ -113,7 +114,7 @@ class RudicsConnection(BaseTask):
                     tm.sleep(self.check_interval)
                     rechecks += 1
 
-                if rechecks == self.max_checks \
+                if rechecks >= self.max_checks \
                         and not self.ready():
                     logging.warning("We have failed to bring up the {0} interface".format(self._device))
                     # TODO: The WVDial process has failed to arrange an interface, we should kill the whole thing
@@ -135,7 +136,7 @@ class RudicsConnection(BaseTask):
 
         def _start_wvdial(self):
             logging.debug("Starting wvdial and hoping it has a \"square go\" at things...")
-            self._proc = subprocess.Popen(["wvdial"])
+            self._proc = subprocess.Popen(shlex.split("pppd file /etc/ppp/peers/iridium"))
 
             # WVDial will eventually become a zombie if inactive
             # TODO: Cleanly terminate zombie processes more effectively allowing re-instantiation of comms (low priority)...
@@ -188,7 +189,7 @@ class RudicsConnection(BaseTask):
                                      for proc in
                                      subprocess.check_output(["ps", "-e"], universal_newlines=True).split('\n')
                                      if len(proc.split()) == 4]
-                           if y[3].startswith('wvdial')]
+                           if y[3].startswith('pppd')]
 
             logging.info("{0} WVDial PIDs found...".format(len(wvdial_pids)))
             return wvdial_pids

@@ -4,13 +4,13 @@ log_level=      DEBUG
 [actions]
 id1=        rudics_start
 task1=      RudicsConnection
-time1=      1835
+time1=      1605
 args1=
     action=     start
 
 id2=        ssh_start
 task2=      SshTunnel
-time2=      1840
+time2=      1610
 args2=
     action=     start
     address=    localhost
@@ -19,13 +19,13 @@ args2=
 
 id3=        ssh_stop
 task3=      SshTunnel
-time3=      1900
+time3=      1730
 args3=
     action=     stop
 
 id4=        rudics_stop
 task4=      RudicsConnection
-time4=      1910
+time4=      1735
 args4=
     action=     stop
 
@@ -59,15 +59,15 @@ args7=
 warn7=      SBDMessage
 ;TODO crit7=    Detailed operations send?
 
-id8=        check_time
+id8=        check_iridium_time
 task8=      Command
 hour8=      12
 minute8=    0
 args8=
-    path=       check_time -w 2018
+    path=       check_iridium_time -w 180
 warn8=      SBDMessage
 
-id9=        check_free_storage_root
+id9=        check_free_storage
 task9=      Command
 interval9=  30
 args9=

@@ -37,7 +37,10 @@ class Command(BaseTask):
         return self.process_check_output(ret)
 
     def process_check_output(self, output):
-        status = RE_OUTPUT.match(str(output)).group(1)
+        try:
+            status = RE_OUTPUT.match(str(output)).group(1)
+        except Exception:
+            status = None
 
         if not status:
             raise TaskException("An unparseable status was received from the called process: {}".format(str(output)))

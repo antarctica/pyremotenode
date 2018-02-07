@@ -82,7 +82,7 @@ class Configuration(object):
         logging.debug("Checking {0} is a valid configuration to use".format(path))
 
         if not os.path.exists(path):
-            logging.error("{0} is not a file...")
+            logging.error("{0} is not a file...".format(path))
             raise os.FileNotFoundError
         return path
 
