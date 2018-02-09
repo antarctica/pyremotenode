@@ -33,12 +33,12 @@ args4=
 
 id5=        check_supply_voltage
 task5=      Command
-interval5=  10
+interval_secs5=  10
 args5=
     path=       check_supply_voltage -w 11.0 -c 10.0
     warn=       50
     crit=       20
-warn5=          SBDMessage
+warn5=          SBDSender
 crit5=          Sleep
 crit_args5=
     until=      next_day
@@ -48,7 +48,7 @@ task6=      Command
 interval6=  10
 args6=
     path=       check_power_consumption -w 10.0
-warn6=      SBDMessage
+warn6=      SBDSender
 ;TODO crit6=    Detailed operations send?
 
 id7=        check_cpu_temperature
@@ -56,7 +56,7 @@ task7=      Command
 interval7=  2
 args7=
     path=       check_cpu_temperature -w 80.0
-warn7=      SBDMessage
+warn7=      SBDSender
 ;TODO crit7=    Detailed operations send?
 
 id8=        check_time
@@ -65,19 +65,26 @@ hour8=      12
 minute8=    0
 args8=
     path=       check_time -w 2018
-warn8=      SBDMessage
+warn8=      SBDSender
 
 id9=        check_free_storage_root
 task9=      Command
 interval9=  30
 args9=
-    path=       check_free_storage -w 20 -c 10
-warn9=      SBDMessage
+    path=       check_free_storage -w 20 -c 10 -i /
+warn9=      SBDSender
+
+id10=       check_free_storage_data
+task10=     Command
+interval10= 30
+args10=
+    path=       check_free_storage -w 20 -c 10 -i /data
+warn10=      SBDSender
 
 ;----------- SLEEP
 
-id10=       sleep
-task10=     Sleep
-time10=     0000
-args10=
+id11=       sleep
+task11=     Sleep
+time11=     0000
+args11=
     until=      0600

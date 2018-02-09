@@ -23,6 +23,8 @@ class BaseTask(object):
 
             ret_val = getattr(self, action)(**kwargs)
             # TODO: Here we can deal with statuses!
+
+
             return ret_val
         else:
             raise TaskException("There is no {} action for the task {}!".format(action, self.__class__.__name__))

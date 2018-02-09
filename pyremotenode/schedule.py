@@ -148,6 +148,16 @@ class Scheduler(object):
                                    coalesce=True,
                                    max_instances=1,
                                    kwargs=kwargs)
+        elif 'interval_secs' in action:
+            logging.debug("Scheduling seconds based interval job")
+
+            self._schedule.add_job(obj,
+                                   id=action['id'],
+                                   trigger='interval',
+                                   seconds=int(action['interval_secs']),
+                                   coalesce=True,
+                                   max_instances=1,
+                                   kwargs=kwargs)
         elif 'date' in action or 'time' in action:
             logging.debug("Scheduling standard job")
 
