@@ -8,6 +8,7 @@ import pyremotenode.tasks
 
 from apscheduler.schedulers.background import BlockingScheduler
 from datetime import date, datetime, time, timedelta
+from pprint import pformat
 from pyremotenode.utils.system import pid_file
 from pytz import utc
 
@@ -33,6 +34,7 @@ class Scheduler(object):
         self._schedule = BlockingScheduler(timezone=utc)
         self._schedule_events = []
         self._schedule_action_instances = {}
+        self._schedule_task_instances = {}
 
         self.init()
 
@@ -75,6 +77,38 @@ class Scheduler(object):
         # TODO: Check shutdown process
         self._schedule.shutdown()
 
+    def add_ok(self, id):
+        action = self._build_configuration(id, 'ok')
+        if action:
+            logging.debug("Submitting ok-status invocation id {}".format(action['id']))
+            self.schedule_immediate_action(action['obj'], action['id'], action['args'])
+
+    def add_warning(self, id):
+        action = self._build_configuration(id, 'warn')
+        if action:
+            logging.debug("Submitting warning-status invocation id {}".format(action['id']))
+            self.schedule_immediate_action(action['obj'], action['id'], action['args'])
+
+    def add_critical(self, id):
+        action = self._build_configuration(id, 'crit')
+        if action:
+            logging.debug("Submitting critical-status invocation id {}".format(action['id']))
+            self.schedule_immediate_action(action['obj'], action['id'], action['args'])
+
+    def add_invalid(self, id):
+        action = self._build_configuration(id, 'invalid')
+        if action:
+            logging.debug("Submitting invalid-status invocation id {}".format(action['id']))
+            self.schedule_immediate_action(action['obj'], action['id'], action['args'])
+
+    def schedule_immediate_action(self, obj, id, args):
+        if obj and id:
+            self._schedule.add_job(obj,
+                                   id=id,
+                                   coalesce=False,
+                                   max_instances=1,
+                                   kwargs=args)
+
     # ==================================================================================
 
     def _configure_instances(self):
@@ -82,12 +116,47 @@ class Scheduler(object):
 
         for idx, cfg in enumerate(self._cfg['actions']):
             logging.debug("Configuring action instance {0}: type {1}".format(idx, cfg['task']))
-            obj = TaskInstanceFactory.get_item(task=cfg['task'], **cfg['args'])
-            self._schedule_action_instances[cfg['task']] = obj
+            action = SchedulerAction(cfg)
+            obj = TaskInstanceFactory.get_item(
+                id=cfg['id'],
+                scheduler=self,
+                task=cfg['task'],
+                **cfg['args'])
+
+            # TODO: Do we want to retain the processing order past here? It is not a logic driver so no is my inclination
+            self._schedule_action_instances[cfg['id']] = action
+            self._schedule_task_instances[cfg['id']] = obj
 
     def _configure_signals(self):
         signal.signal(signal.SIGTERM, self._sig_handler)
         signal.signal(signal.SIGINT, self._sig_handler)
+
+    def _build_configuration(self, id, task_type):
+        """
+        Build an alternate action configuration based on the original
+        :param type:
+        :return: an alternate configuration
+        """
+        action = self._schedule_action_instances[id]
+        if not action[task_type]:
+            return None
+
+        kwargs = action["{}_args".format(type)] if "{}_args".format(type) in action else {}
+        kwargs['invoking_task'] = self._schedule_task_instances[id]
+
+        id = "{}_{}".format(action['id'], datetime.now().strftime("%H%m%s"))
+        # TODO: We don't provide scheduler, triggered actions can't provide further events (yet)
+        obj = TaskInstanceFactory.get_item(
+            id=id,
+            task=action[task_type],
+            **kwargs
+        )
+        return {
+            'id':   id,
+            'task': task_type,
+            'obj':  obj,
+            'args': kwargs
+        }
 
     def _plan_schedule(self):
         # TODO: This needs to take account of wide spanning controls!
@@ -121,8 +190,8 @@ class Scheduler(object):
         start = datetime.now()
 
         try:
-            for idx, cfg in enumerate(self._cfg['actions']):
-                action = SchedulerAction(cfg)
+            for id, action in self._schedule_action_instances.items():
+                logging.info("Planning {}".format(id))
                 self._plan_schedule_task(start, until, action)
                 # TODO: CURRENT - Update for apscheduler
         except:
@@ -136,7 +205,14 @@ class Scheduler(object):
         # NOTE: Copy this before changing, or when passing!
         kwargs = action['args']
 
-        obj = self._schedule_action_instances[action['task']]
+        obj = self._schedule_task_instances[action['id']]
+
+        if 'onboot' in action:
+            self._schedule.add_job(obj,
+                                   id="boot_{}".format(action['id']),
+                                   coalesce=False,
+                                   max_instances=1,
+                                   kwargs=kwargs)
 
         if 'interval' in action:
             logging.debug("Scheduling interval based job")
@@ -239,15 +315,19 @@ class SchedulerAction(object):
     def __next__(self):
         return self.__iter.next()
 
+    def __str__(self):
+        return "SchedulerAction config {}".format(pformat(self._cfg))
+
 
 class TaskInstanceFactory(object):
     @classmethod
-    def get_item(cls, task, **kwargs):
+    def get_item(cls, id, task, scheduler=None, **kwargs):
         klass_name = TaskInstanceFactory.get_klass_name(task)
 
         if hasattr(pyremotenode.tasks, klass_name):
             # TODO: warning and critical object creation or configuration supply
-            return getattr(pyremotenode.tasks, klass_name)(**kwargs)
+            return getattr(pyremotenode.tasks, klass_name)(
+                id=id, scheduler=scheduler, **kwargs)
 
         logging.error("No class named {0} found in pyremotenode.tasks".format(klass_name))
         raise ReferenceError

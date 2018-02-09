@@ -33,15 +33,14 @@ args4=
 
 id5=        check_supply_voltage
 task5=      Command
-interval_secs5=  10
+interval5=  10
+onboot5=    1
 args5=
-    path=       check_supply_voltage -w 11.0 -c 10.0
-    warn=       50
-    crit=       20
+    path=       check_supply_voltage -i -w 13.0 -c 10.0
 warn5=          SBDSender
 crit5=          Sleep
 crit_args5=
-    until=      next_day
+    until_time= 1100
 
 id6=        check_power_consumption
 task6=      Command
@@ -85,6 +84,6 @@ warn10=      SBDSender
 
 id11=       sleep
 task11=     Sleep
-time11=     0000
+time11=     2200
 args11=
-    until=      0600
+    until_time= 0800

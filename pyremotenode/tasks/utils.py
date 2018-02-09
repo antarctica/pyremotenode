@@ -18,6 +18,8 @@ class Command(BaseTask):
         self._proc = None
 
         for k, v in kwargs.items():
+            if k in ["id", "scheduler"]:
+                continue
             self._args.append("--{0}".format(k))
             self._args.append(v)
         logging.debug("Command: {0}".format(self._args))
@@ -34,6 +36,7 @@ class Command(BaseTask):
             raise TaskException("The called command failed with an out of bound return code...")
 
         logging.debug("Check return output: {0}".format(ret))
+        self.state = ret
         return self.process_check_output(ret)
 
     def process_check_output(self, output):

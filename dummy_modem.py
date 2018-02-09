@@ -45,18 +45,23 @@ class DummyModem(object):
         with self._socat:
             for stdout in self._socat.stdout:
                 response = None
+                reply_lines = []
                 stdout = stdout.strip()
 
                 logging.debug("Received: {}".format(stdout))
 
-                sbd = re.match(r'AT\+SBDW([B])=(\d+)', stdout)
-                if sbd:
-                    response = "READY\r\n"
+                # TODO: Change this to be a control sequence try block, it'll be nicer
+                while response != "END":
+                    response = input("Response: ").strip()
+                    if response != "END":
+                        reply_lines.append(response)
 
-                if response:
-                    logging.debug("Sending {}".format(response))
+                if len(reply_lines):
+                    logging.debug("Sending {}".format("\n".join(reply_lines)))
                     stdin.write(response)
                     stdin.flush()
+                else:
+                    logging.info("You've input an invalid response")
 
     def stop(self):
         self._socat.terminate()

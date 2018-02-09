@@ -1,5 +1,6 @@
 import logging
 import re
+import shlex
 import subprocess as sp
 
 from datetime import datetime, timedelta, time
@@ -12,8 +13,8 @@ class Sleep(BaseTask):
         super(Sleep, self).__init__(**kwargs)
 
     def default_action(self,
-                       until_date=datetime.now().strftime("%d%m%Y"),
-                       until_time="1200",
+                       until_date="tomorrow",
+                       until_time="0900",
                        **kwargs):
         logging.debug("Running default action for Sleep")
         dt = None
@@ -35,15 +36,18 @@ class Sleep(BaseTask):
 
         seconds = (datetime.combine(dt, tm) - datetime.now()).total_seconds()
         logging.info("Sleeping for {} seconds".format(seconds))
-        cmd = ["tshwctl", "-L", "-m", seconds]
+        cmd = "tshwctl -L -m --timewkup={}".format(str(int(seconds)))
 
-        rc = sp.call(cmd, shell=True)
+        logging.debug("Running Sleep command: {}".format(cmd))
+        rc = sp.call(shlex.split(cmd))
 
         if rc != 0:
             # TODO: Handle this, should be extremely unlikely...
+            self.state = BaseTask.CRITICAL
             logging.error("Did not manage to go to sleep, something's very wrong...")
 
-        return BaseTask.OK
+        self.state = BaseTask.OK
+        return self.state
 
 
 class TS7400Utils(object):
@@ -51,9 +55,10 @@ class TS7400Utils(object):
     def rtc_clock(set = True):
         type = "S" if set else "G"
         logging.info("{}etting RTC from OS clock".format(type))
-        cmd = ["tshwctl", "--{}etrtc".format(type.lower())]
+        cmd = "tshwctl --{}etrtc".format(type.lower())
 
-        rc = sp.call(cmd, shell=True)
+        logging.debug("Running TS7400Utils command: {}".format(cmd))
+        rc = sp.call(shlex.split(cmd))
 
         if rc != 0:
             logging.warning("Did not manage to {}et RTC...".format(type.lower()))

@@ -6,6 +6,7 @@ import serial
 import shlex
 import signal
 import subprocess
+import sys
 import threading as t
 import time as tm
 
@@ -17,20 +18,23 @@ from pyremotenode.tasks import BaseTask
 class ModemLock(object):
     # TODO: Pass the configuration options for modem port
     def __init__(self, dio_port="1_20"):
-        self._lock = t.Lock()
+        self._lock = t.RLock()
         self._modem_port = dio_port
 
     def acquire(self, **kwargs):
         logging.debug("Acquiring and switching on modem {}".format(self._modem_port))
-        self._lock.acquire(**kwargs)
+        res = self._lock.acquire(**kwargs)
         tm.sleep(0.1)
-        subprocess.call(['tshwctl', '--setdio', self._modem_port])
+        cmd = "tshwctl --setdio {}".format(self._modem_port)
+        subprocess.call(shlex.split(cmd))
+        return res
 
     def release(self, **kwargs):
         logging.debug("Releasing and switching off modem {}".format(self._modem_port))
-        subprocess.call(['tshwctl', '--clrdio', self._modem_port])
+        cmd = "tshwctl --clrdio {}".format(self._modem_port)
+        subprocess.call(shlex.split(cmd))
         tm.sleep(0.1)
-        self._lock.release(**kwargs)
+        return self._lock.release(**kwargs)
 
     def __enter__(self):
         self.acquire()
@@ -41,10 +45,6 @@ class ModemLock(object):
 
 class ModemConnection(object):
     class __ModemConnection:
-        modem_lock = ModemLock()       # Lock message buffer
-        message_queue = queue.Queue()
-        running = False
-
         _re_signal = re.compile(r'\s*\+CSQ:(\d)\s*$', re.MULTILINE)
         _re_sbdix_response = re.compile(r'^\+SBDIX: (\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
 
@@ -52,6 +52,7 @@ class ModemConnection(object):
         def __init__(self, serial_port="/tmp/ttySP1", serial_timeout=20):
             self._thread = None
 
+            logging.info("Creating connection to modem on {}".format(serial_port))
             self._data = serial.Serial(
                 port=serial_port,
                 timeout=float(serial_timeout),
@@ -61,23 +62,33 @@ class ModemConnection(object):
                 stopbits=serial.STOPBITS_ONE
             )
 
+            self._modem_lock = ModemLock()       # Lock message buffer
+            self._message_queue = queue.Queue()
+            # TODO: This should be synchronized potentially, but we won't really run into those issues with it
+            self._running = False
+
         def start(self):
             # TODO: Draft implementation of the threading for message sending...
             if not self._thread:
+                logging.info("Starting modem thread")
                 self._thread = t.Thread(name=self.__class__.__name__, target=self.run)
                 self._thread.setDaemon(True)
+                self._running = True
                 self._thread.start()
 
         def run(self):
-            while self.running:
-                if len(self.message_queue) > 0 and self.modem_lock.acquire(blocking=False):
+            while self._running:
+                if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
                     if not self._data.is_open:
                         self._data.open()
                     i = 1
 
                     try:
                         # Check we have a good enough signal to work with (>3)
-                        signal_test = self._send_receive_messages("AT+CSQ")[0]
+                        signal_test = self._send_receive_messages("AT+CSQ")
+                        if signal_test == "":
+                            raise ModemConnectionException(
+                                "No response received for signal quality check")
                         signal_level = self._re_signal.match(signal_test)
 
                         if signal_level:
@@ -118,8 +129,11 @@ class ModemConnection(object):
                             i += 1
                     except queue.Empty:
                         logging.info("{} messages processed".format(i))
+                    except serial.serialutil.SerialException:
+                        logging.error("Modem inoperational or another error occurred")
+                        print(sys.exc_info())
                     finally:
-                        if self._data.open():
+                        if self._data.is_open:
                             self._data.close()
                         self.modem_lock.release()
                 logging.debug("{} thread waiting...".format(self.__class__.__name__))
@@ -142,7 +156,7 @@ class ModemConnection(object):
             if not self._data.isOpen():
                 raise ModemConnectionException('Cannot send message; data port is not open')
             self._data.flushInput()
-            self._data.write(message.encode('latin-1'))
+            self._data.write(("{}\n".format(message)).encode('latin-1'))
 
             logging.debug('Message sent: "{}"'.format(message.strip()))
             reply = self._data.readline().decode('latin-1')
@@ -154,8 +168,12 @@ class ModemConnection(object):
             self.message_queue.put(("sbd", message))
 
         @property
-        def get_modem_lock(self):
-            return self.modem_lock
+        def modem_lock(self):
+            return self._modem_lock
+
+        @property
+        def message_queue(self):
+            return self._message_queue
 
     instance = None
 
@@ -333,13 +351,17 @@ class SBDSender(BaseTask):
         BaseTask.__init__(self, **kwargs)
         self.modem = ModemConnection()
 
-    def default_action(self, message_text, **kwargs):
+    def default_action(self, invoking_task, **kwargs):
         logging.debug("Running default action for SBDMessage")
+
+        message_text = str(invoking_task.state)
+        warning = True if message_text.find("warning") >= 0 else False
+        critical = True if message_text.find("critical") >= 0 else False
 
         self.modem.send_sbd(SBDMessage(
             message_text,
-            message_text.contains("warning"),
-            message_text.contains("critical")))
+            warning,
+            critical))
         self.modem.start()
 
 
