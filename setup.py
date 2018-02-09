@@ -4,7 +4,7 @@ setup(
     name = 'pyremotenode',
     packages = [
         'pyremotenode.tasks',
-        'pyremotenode.check_utils',
+        'pyremotenode.utils',
         'pyremotenode'
     ],
     package_data = {"": [

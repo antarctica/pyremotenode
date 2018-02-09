@@ -3,4 +3,4 @@ __pycache__
 .idea/
 build/
 dist/
-pyremotenode.egg_info/
+pyremotenode.egg-info/
