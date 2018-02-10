@@ -141,6 +141,7 @@ class Scheduler(object):
         :param type:
         :return: an alternate configuration
         """
+        # TODO: Allow multiple actions per configuration, limited at present
         action = self._schedule_action_instances[id]
         if not action[task_type]:
             return None
@@ -149,7 +150,8 @@ class Scheduler(object):
         kwargs['invoking_task'] = self._schedule_task_instances[id]
 
         id = "{}_{}".format(action['id'], datetime.now().strftime("%H%m%s"))
-        # TODO: We don't provide scheduler, triggered actions can't provide further events (yet)
+
+        # NOTE: We don't provide scheduler, triggered actions can't invoke further events (yet)
         obj = TaskInstanceFactory.get_item(
             id=id,
             task=action[task_type],
@@ -163,8 +165,6 @@ class Scheduler(object):
         }
 
     def _plan_schedule(self):
-        # TODO: This needs to take account of wide spanning controls!
-
         # If after 11pm, we plan to the next day
         # If before 11pm, we plan to the end of today
         # We then schedule another _plan_schedule for 11:01pm
@@ -190,6 +190,7 @@ class Scheduler(object):
         self._plan_schedule_tasks(reference, next_schedule)
 
     def _plan_schedule_tasks(self, start, until):
+        # TODO: This needs to take account of wide spanning controls!
         # TODO: grace period for datetime.now()
         start = datetime.now()
 
@@ -197,7 +198,6 @@ class Scheduler(object):
             for id, action in self._schedule_action_instances.items():
                 logging.info("Planning {}".format(id))
                 self._plan_schedule_task(start, until, action)
-                # TODO: CURRENT - Update for apscheduler
         except:
             raise ScheduleConfigurationError
 

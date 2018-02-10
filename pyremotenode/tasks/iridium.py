@@ -377,5 +377,11 @@ class SBDMessage(object):
         return "{}: {}".format(self._dt, self._msg)[:120]
 
 
+class EmergencyConnection(RudicsConnection):
+    def default_action(self, **kwargs):
+        logging.warning("Creating an emergency connection: NOT IMPLEMENTED YET (TODO)")
+        pass
+
+
 class ModemConnectionException(Exception):
     pass

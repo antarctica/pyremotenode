@@ -13,14 +13,16 @@ class Sleep(BaseTask):
         super(Sleep, self).__init__(**kwargs)
 
     def default_action(self,
-                       until_date="tomorrow",
+                       until_date="today",
                        until_time="0900",
                        **kwargs):
         logging.debug("Running default action for Sleep")
         dt = None
 
         if type(until_date) == str:
-            if until_date.lower() == "tomorrow":
+            if until_date.lower() == "today":
+                dt = datetime.now().date()
+            elif until_date.lower() == "tomorrow":
                 dt = (datetime.now() + timedelta(days=1)).date()
             elif self._re_date.match(until_date):
                 dt = datetime.strptime(until_date, "%d%m%Y").date()
@@ -32,9 +34,13 @@ class Sleep(BaseTask):
 
         tm = datetime.strptime(until_time, "%H%M").time()
 
-        TS7400Utils.rtc_clock()
-
         seconds = (datetime.combine(dt, tm) - datetime.now()).total_seconds()
+        # Evaluate minimum seconds, push to tomorrow if we've gone past the time today
+        if seconds < 60:
+            dt = dt + timedelta(days=1)
+            seconds = (datetime.combine(dt, tm) - datetime.now()).total_seconds()
+
+        TS7400Utils.rtc_clock()
         logging.info("Sleeping for {} seconds".format(seconds))
         cmd = "tshwctl -L -m --timewkup={}".format(str(int(seconds)))
 
