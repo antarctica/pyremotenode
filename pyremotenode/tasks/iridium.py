@@ -207,7 +207,7 @@ class RudicsConnection(BaseTask):
             self.check_interval = check_interval
             self.watch_interval = watch_interval
 
-        def start(self):
+        def start(self, **kwargs):
             logging.debug("Running start action for RudicsConnection")
             self._thread = t.Thread(name=self.__class__.__name__, target=self.watch)
 
@@ -265,7 +265,7 @@ class RudicsConnection(BaseTask):
                     logging.info("We have the {0} interface at {1}".format(self._device, self._interface_path))
                     tm.sleep(self.watch_interval)
 
-        def stop(self):
+        def stop(self, **kwargs):
             logging.debug("Running stop action for RudicsConnection")
 
             if self._proc:
@@ -343,6 +343,8 @@ class RudicsConnection(BaseTask):
             RudicsConnection.instance = RudicsConnection.__RudicsConnection(**kwargs)
 
     def __getattr__(self, item):
+        if hasattr(super(RudicsConnection, self), item):
+            return getattr(super(RudicsConnection, self), item)
         return getattr(self.instance, item)
 
 

@@ -52,5 +52,7 @@ class SshTunnel(BaseTask):
             SshTunnel.instance = SshTunnel.__SshTunnel(**kwargs)
 
     def __getattr__(self, item):
+        if hasattr(super(SshTunnel, self), item):
+            return getattr(super(SshTunnel, self), item)
         return getattr(self.instance, item)
 

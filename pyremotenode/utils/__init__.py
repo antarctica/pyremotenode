@@ -33,7 +33,8 @@ def setup_logging(name,
     log.addHandler(stdout_log)
 
     if filelog:
-        os.makedirs(logdir, exist_ok=True)
+        if not os.path.isdir(logdir):
+            os.makedirs(logdir, exist_ok=True)
 
         file_hndlr = logging.FileHandler(os.path.join(logdir, dt.datetime.now().strftime("%d-%m-%Y.log")))
         file_hndlr.setLevel(level)
