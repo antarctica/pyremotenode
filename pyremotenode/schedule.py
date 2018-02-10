@@ -1,6 +1,7 @@
 import logging
 import os
 import signal
+import time as tm
 import sys
 
 import pyremotenode
@@ -66,7 +67,8 @@ class Scheduler(object):
                 while self._running:
                     try:
                         logging.debug("Scheduler sleeping")
-                        time.sleep(10)
+                        tm.sleep(10)
+
                         # TODO: Check for configurations / updates
                     except Exception:
                         logging.error("Error in main thread, something very wrong!")
