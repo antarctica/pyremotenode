@@ -40,7 +40,7 @@ class BaseTask(object):
                 elif ret_val == self.CRITICAL:
                     self._sched.add_critical(self._id)
                 elif ret_val == self.INVALID:
-                    self._sched.add_unknown(self._id)
+                    self._sched.add_invalid(self._id)
 
             return ret_val
         else:

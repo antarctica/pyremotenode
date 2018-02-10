@@ -49,7 +49,7 @@ class ModemConnection(object):
         _re_sbdix_response = re.compile(r'^\+SBDIX: (\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
 
         # TODO: Pass configuration options to ModemConnection
-        def __init__(self, serial_port="/tmp/ttySP1", serial_timeout=20):
+        def __init__(self, serial_port="/tmp/ttySP1", serial_timeout=20, **kwargs):
             self._thread = None
 
             logging.info("Creating connection to modem on {}".format(serial_port))
@@ -193,7 +193,7 @@ class RudicsConnection(BaseTask):
                      check_interval=20,
                      watch_interval=30,
                      **kwargs):
-            self.modem = ModemConnection()
+            self.modem = ModemConnection(**kwargs)
 
             logging.debug("Creating {0}".format(self.__class__.__name__))
             self._device = device

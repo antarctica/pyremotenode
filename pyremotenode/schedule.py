@@ -6,7 +6,7 @@ import sys
 import pyremotenode
 import pyremotenode.tasks
 
-from apscheduler.schedulers.background import BlockingScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import date, datetime, time, timedelta
 from pprint import pformat
 from pyremotenode.utils.system import pid_file
@@ -24,14 +24,14 @@ class Scheduler(object):
     def __init__(self, configuration,
                  start_when_fail=False,
                  pid_file=PID_FILE):
-        logging.debug("Creating scheduler")
+        logging.info("Creating scheduler")
         self._cfg = configuration
         self._pid = pid_file
 
         self._running = False
         self._start_when_fail = start_when_fail
 
-        self._schedule = BlockingScheduler(timezone=utc)
+        self._schedule = BackgroundScheduler(timezone=utc)
         self._schedule_events = []
         self._schedule_action_instances = {}
         self._schedule_task_instances = {}
@@ -63,11 +63,13 @@ class Scheduler(object):
                 self._schedule.print_jobs()
                 self._schedule.start()
 
-                # TODO: BackgroundScheduler?
-                #while self._running:
-                #    logging.debug("Scheduler sleeping")
-                #    timeutils.sleep(10)
-                #    # TODO: Check for configurations / updates
+                while self._running:
+                    try:
+                        logging.debug("Scheduler sleeping")
+                        time.sleep(10)
+                        # TODO: Check for configurations / updates
+                    except Exception:
+                        logging.error("Error in main thread, something very wrong!")
         finally:
             if os.path.exists(PID_FILE):
                 os.unlink(PID_FILE)

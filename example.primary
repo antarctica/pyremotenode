@@ -7,6 +7,8 @@ task1=      RudicsConnection
 time1=      1835
 args1=
     action=     start
+    serial_port=    /dev/ttyUSB0
+    serial_timeout= 30
 
 id2=        ssh_start
 task2=      SshTunnel
@@ -46,7 +48,7 @@ id6=        check_power_consumption
 task6=      Command
 interval6=  10
 args6=
-    path=       check_power_consumption -w 10.0
+    path=       check_power_consumption -w 10.0 -t ts7400 1
 warn6=      SBDSender
 ;TODO crit6=    Detailed operations send?
 

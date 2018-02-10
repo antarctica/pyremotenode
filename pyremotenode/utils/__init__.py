@@ -1,5 +1,7 @@
+import datetime as dt
 import logging
 import logging.handlers
+import os
 import socket
 
 from .config import Configuration
@@ -7,41 +9,47 @@ from .config import Configuration
 __all__ = ["Configuration"]
 
 
-def setup_logging(name, level=logging.DEBUG, syslog=False):
-    """
-    setup_logging
-
-    This provides a standard logging setup for any caller, to both Syslog
-    on the INFO channel and to STDERR
-
-    Currently this assumes we have rsyslog running on the host in question
-
-    :param name: Caller ID
-    :param level: Logger level
-    :return:
-     logging.Logger usable object for caller
-    """
+def setup_logging(name,
+                  level=logging.DEBUG,
+                  filelog=True,
+                  logdir=os.path.join(os.sep, "data", "pyremotenode", "logs"),
+                  syslog=False):
     hostname = socket.gethostname().split(".")[0]
 
-    # Take care of the STDERR configuration
-    logging.basicConfig(
-        level=level,
-        format="[{asctime} :{levelname:>10} {module:>20}] - {message}",
+    formatter = logging.Formatter(
+        fmt="[{asctime} :{levelname:>10} {module:>20}] - {message}",
         datefmt="%d-%m-%y %T",
-        style='{',
+        style='{'
     )
 
+    logging.basicConfig()
+    log = logging.getLogger()
+    log.setLevel(level)
+    log.handlers = []
+
+    stdout_log = logging.StreamHandler()
+    stdout_log.setLevel(level)
+    stdout_log.setFormatter(formatter)
+    log.addHandler(stdout_log)
+
+    if filelog:
+        os.makedirs(logdir, exist_ok=True)
+
+        file_hndlr = logging.FileHandler(os.path.join(logdir, dt.datetime.now().strftime("%d-%m-%Y.log")))
+        file_hndlr.setLevel(level)
+        file_hndlr.setFormatter(formatter)
+        log.addHandler(file_hndlr)
+
     if syslog:
-        # Take care of the Syslog configuration
-        syslog = logging.handlers.SysLogHandler(
-            facility=logging.handlers.SysLogHandler.LOG_INFO
-        )
-        syslog.setLevel(level=level)
-        syslog.setFormatter(logging.Formatter(
-            fmt="{asctime} {hostname} [{{process}}]: {{message}}".format(hostname=hostname),
+        syslog_formatter = logging.Formatter(
+            fmt="{{asctime}} {name}: {{message}}".format(name=name),
             datefmt="%h %d %T",
             style='{'
-        ))
-
-        logging.addHandler(syslog)
-    return logging.getLogger(name)
+        )
+        # Take care of the Syslog configuration
+        syslog_hndlr = logging.handlers.SysLogHandler(
+            facility=logging.handlers.SysLogHandler.LOG_INFO
+        )
+        syslog_hndlr.setLevel(level)
+        syslog_hndlr.setFormatter(syslog_formatter)
+        log.addHandler(syslog_hndlr)

@@ -3,12 +3,10 @@
 import argparse
 import logging
 import os
+import sys
 
 from pyremotenode.schedule import Scheduler
 from pyremotenode.utils import Configuration, setup_logging
-
-log = setup_logging(__name__)
-logging.info("PyRemoteNode")
 
 if __name__ == '__main__':
     a = argparse.ArgumentParser()
@@ -19,10 +17,36 @@ if __name__ == '__main__':
                    action="store_true", default=False)
     a.add_argument("--pidfile", "-p", help="PID file to manage for service operations",
                    default=os.path.join(os.sep, "var", "run", "{0}.pid".format(__name__)))
+    a.add_argument("--no-daemon", "-n", help="Do not daemon", default=False, action="store_true")
     args = a.parse_args()
+
+    if not args.no_daemon:
+        try:
+            pid = os.fork()
+            if pid > 0:
+                sys.exit(0)
+        except OSError as e:
+            print("Fork #1 failed: {} ({})".format(e.errno, e.strerror), file=sys.stderr)
+            sys.exit(1)
+
+        os.chdir(os.sep)
+        os.setsid()
+        os.setumask(0)
+
+        try:
+            pid = os.fork()
+            if pid > 0:
+                print("Daemon PID {}".format(pid))
+                sys.exit(0)
+        except OSError as e:
+            print("Fork #2 failed: {} ({})".format(e.errno, e.strerror), file=sys.stderr)
+            sys.exit(1)
 
     cfg = Configuration(args.config).config
 
+    setup_logging("PyRemoteNode",
+                  level=getattr(logging, cfg['general']['log_level']),
+                  syslog=True)
     m = Scheduler(cfg,
                   start_when_fail=args.start_when_fail,
                   pid_file=args.pidfile)
