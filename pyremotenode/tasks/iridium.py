@@ -22,17 +22,19 @@ class ModemLock(object):
         self._modem_port = dio_port
 
     def acquire(self, **kwargs):
-        logging.debug("Acquiring and switching on modem {}".format(self._modem_port))
+        logging.info("Acquiring and switching on modem {}".format(self._modem_port))
         res = self._lock.acquire(**kwargs)
         tm.sleep(0.1)
         cmd = "tshwctl --setdio {}".format(self._modem_port)
-        subprocess.call(shlex.split(cmd))
+        rc = subprocess.call(shlex.split(cmd))
+        logging.debug("tshwctl returned: {}".format(rc))
         return res
 
     def release(self, **kwargs):
-        logging.debug("Releasing and switching off modem {}".format(self._modem_port))
+        logging.info("Releasing and switching off modem {}".format(self._modem_port))
         cmd = "tshwctl --clrdio {}".format(self._modem_port)
-        subprocess.call(shlex.split(cmd))
+        rc = subprocess.call(shlex.split(cmd))
+        logging.debug("tshwctl returned: {}".format(rc))
         tm.sleep(0.1)
         return self._lock.release(**kwargs)
 
@@ -228,6 +230,7 @@ class RudicsConnection(BaseTask):
                     self.running = True
                     self._thread.start()
                     success = True
+                    logging.info("Started dialer")
             return success
 
         def ready(self):
@@ -282,8 +285,10 @@ class RudicsConnection(BaseTask):
             # Dialer will eventually become a zombie if inactive
             # TODO: Cleanly terminate zombie processes more effectively allowing re-instantiation of comms (low priority)...
             if self._proc.pid:
+                logging.debug("We have a pppd instance at pid {}".format(self._proc.pid))
                 # TODO: Check for the existence / instantiation of the ppp child process, if we want to try more than once anyway
                 return True
+            logging.warning("We not not have a pppd instance")
             return False
 
         def _stop_dialer(self, sig_to_stop, dialer_pids=[]):
