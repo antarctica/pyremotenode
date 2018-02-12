@@ -194,6 +194,7 @@ class RudicsConnection(BaseTask):
                      max_checks=3,
                      check_interval=20,
                      watch_interval=30,
+                     wait_to_stop=10,
                      **kwargs):
             self.modem = ModemConnection(**kwargs)
 
@@ -208,6 +209,7 @@ class RudicsConnection(BaseTask):
             self.max_checks = max_checks
             self.check_interval = check_interval
             self.watch_interval = watch_interval
+            self.wait_to_stop = wait_to_stop
 
         def start(self, **kwargs):
             logging.debug("Running start action for RudicsConnection")
@@ -275,12 +277,12 @@ class RudicsConnection(BaseTask):
                 logging.info("Terminating process with PID {0}".format(self._proc.pid))
                 self._proc.terminate()
                 self._proc = None
-                tm.sleep(self._wait_to_stop)
+                tm.sleep(self.wait_to_stop)
             self._terminate_dialer()
 
         def _start_dialer(self):
             logging.debug("Starting dialer and hoping it has a \"square go\" at things...")
-            self._proc = subprocess.Popen(shlex.split("pppd file /etc/ppp/peers/iridium"))
+            self._proc = subprocess.Popen(shlex.split("pppd nodetach file /etc/ppp/peers/iridium &"))
 
             # Dialer will eventually become a zombie if inactive
             # TODO: Cleanly terminate zombie processes more effectively allowing re-instantiation of comms (low priority)...
@@ -317,7 +319,7 @@ class RudicsConnection(BaseTask):
                 if retries == self._max_kill_tries - 1:
                     sig_to_stop = signal.SIGKILL
                 self._stop_dialer(sig_to_stop, pids)
-                tm.sleep(self._wait_to_stop)
+                tm.sleep(self.wait_to_stop)
                 retries += 1
                 logging.debug("Attempt {0} to stop Dialer".format(retries))
                 pids = self._dialer_pids()
@@ -325,6 +327,7 @@ class RudicsConnection(BaseTask):
                     self.modem.modem_lock.release()
                     return True
 
+            logging.error("We've not successfully killed pids {} but have to release the modem".format(",".join(pids)))
             self.modem.modem_lock.release()
             return False
 
@@ -337,7 +340,7 @@ class RudicsConnection(BaseTask):
                                      if len(proc.split()) == 4]
                            if y[3].startswith('pppd')]
 
-            logging.info("{0} Dialer PIDs found...".format(len(dialer_pids)))
+            logging.info("{} Dialer PIDs found: {}".format(len(dialer_pids), ",".join(dialer_pids)))
             return dialer_pids
 
     instance = None
