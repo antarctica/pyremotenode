@@ -37,7 +37,8 @@ class SshTunnel(BaseTask):
                 else:
                     logging.warning("Failed to manage ppp0 route for {}".format(self._tunnel_address))
 
-            cmd = ["autossh", "-M 40000:40001",
+            # TODO: Don't run the service as root, sudo allows us to pick up pyrm's credentials
+            cmd = ["sudo", "-u", "pyremotenode", "autossh", "-M 40000:40001",
                    "-o", "GSSAPIAuthentication=no",
                    "-o", "PasswordAuthentication=no",
                    "-o", "ServerAliveInterval=10",

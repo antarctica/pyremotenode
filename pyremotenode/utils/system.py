@@ -1,10 +1,15 @@
 import fcntl
+import logging
 import os
 
 
 class pid_file:
     def __init__(self, path):
         self._path = path
+
+        if not os.path.isdir(os.path.dirname(path)):
+            logging.debug("Creating directory {} for PID".format(path))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
 
         if os.path.exists(path):
             raise PidFileExistsError

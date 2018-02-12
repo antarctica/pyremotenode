@@ -266,9 +266,11 @@ class Scheduler(object):
                                    kwargs=kwargs,
                                    **job_args)
         else:
-            logging.error("No compatible timing schedule present for this configuration")
-            raise ScheduleConfigurationError
-
+            if 'onboot' not in action:
+                logging.error("No compatible timing schedule present for this configuration")
+                raise ScheduleConfigurationError
+            else:
+                logging.warning("{} will only be run at startup".format(action['id']))
         return timings
 
     @staticmethod

@@ -195,6 +195,7 @@ class RudicsConnection(BaseTask):
                      check_interval=20,
                      watch_interval=30,
                      wait_to_stop=10,
+                     dialer="pppd",
                      **kwargs):
             self.modem = ModemConnection(**kwargs)
 
@@ -210,6 +211,11 @@ class RudicsConnection(BaseTask):
             self.check_interval = check_interval
             self.watch_interval = watch_interval
             self.wait_to_stop = wait_to_stop
+
+            self.dialer = dialer
+
+            if self.dialer not in ["wvdial", "pppd"]:
+                raise RudicsConnectionException("Invalid modem type selected: {}".format(self.dialer))
 
         def start(self, **kwargs):
             logging.debug("Running start action for RudicsConnection")
@@ -232,7 +238,7 @@ class RudicsConnection(BaseTask):
                     self.running = True
                     self._thread.start()
                     success = True
-                    logging.info("Started dialer")
+                    logging.info("Started {}".format(self.dialer))
             return success
 
         def ready(self):
@@ -282,15 +288,19 @@ class RudicsConnection(BaseTask):
 
         def _start_dialer(self):
             logging.debug("Starting dialer and hoping it has a \"square go\" at things...")
-            self._proc = subprocess.Popen(shlex.split("pppd nodetach file /etc/ppp/peers/iridium &"))
 
-            # Dialer will eventually become a zombie if inactive
-            # TODO: Cleanly terminate zombie processes more effectively allowing re-instantiation of comms (low priority)...
+            if self.dialer == "pppd":
+                self._proc = subprocess.Popen(shlex.split("pppd nodetach file /etc/ppp/peers/iridium &"))
+            elif self.dialer == "wvdial":
+                self._proc = subprocess.Popen(shlex.split("wvdial"))
+            else:
+                raise RuntimeError("Cannot continue connecting, invalid dialer {} selected".format(self.dialer))
+
             if self._proc.pid:
-                logging.debug("We have a pppd instance at pid {}".format(self._proc.pid))
+                logging.debug("We have a {} instance at pid {}".format(self.dialer, self._proc.pid))
                 # TODO: Check for the existence / instantiation of the ppp child process, if we want to try more than once anyway
                 return True
-            logging.warning("We not not have a pppd instance")
+            logging.warning("We not not have a {} instance".format(self.dialer))
             return False
 
         def _stop_dialer(self, sig_to_stop, dialer_pids=[]):
@@ -327,6 +337,11 @@ class RudicsConnection(BaseTask):
                     self.modem.modem_lock.release()
                     return True
 
+            pppd_if_path = os.path.join("var", "run", "ppp0.pid")
+            if os.path.exists(pppd_if_path):
+                logging.warning("Unclean shutdown of pppd, removing PID file for interface")
+                os.unlink(pppd_if_path)
+
             logging.error("We've not successfully killed pids {} but have to release the modem".format(",".join(pids)))
             self.modem.modem_lock.release()
             return False
@@ -338,7 +353,7 @@ class RudicsConnection(BaseTask):
                                      for proc in
                                      subprocess.check_output(["ps", "-e"], universal_newlines=True).split('\n')
                                      if len(proc.split()) == 4]
-                           if y[3].startswith('pppd')]
+                           if y[3].startswith(self.dialer)]
 
             logging.info("{} Dialer PIDs found: {}".format(len(dialer_pids), ",".join(dialer_pids)))
             return dialer_pids
@@ -394,4 +409,8 @@ class EmergencyConnection(RudicsConnection):
 
 
 class ModemConnectionException(Exception):
+    pass
+
+
+class RudicsConnectionException(Exception):
     pass
