@@ -30,18 +30,18 @@ class BaseTask(object):
             try:
                 ret_val = getattr(self, action)(**kwargs)
             except Exception:
-                logging.error("Unhandled exception from within action {}".format(self.id))
+                logging.error("Unhandled exception from within action {}".format(self._id))
                 logging.error(traceback.format_exception())
 
-            if self.sched:
+            if self._sched:
                 if ret_val == self.OK:
-                    self._sched.add_ok(self.id)
+                    self._sched.add_ok(self._id)
                 elif ret_val == self.WARNING:
-                    self._sched.add_warning(self.id)
+                    self._sched.add_warning(self._id)
                 elif ret_val == self.CRITICAL:
-                    self._sched.add_critical(self.id)
+                    self._sched.add_critical(self._id)
                 elif ret_val == self.INVALID:
-                    self._sched.add_invalid(self.id)
+                    self._sched.add_invalid(self._id)
 
             return ret_val
         else:
@@ -63,15 +63,6 @@ class BaseTask(object):
     @state.setter
     def state(self, state):
         self._state = state
-
-    # NOTE: Dealing with singletons and properties, weirdness!?!
-    @property
-    def id(self):
-        return self._id
-
-    @property
-    def sched(self):
-        return self._sched
 
 
 from pyremotenode.tasks.iridium import RudicsConnection, SBDSender

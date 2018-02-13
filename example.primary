@@ -4,15 +4,15 @@ log_level=      DEBUG
 [actions]
 id1=        rudics_start
 task1=      RudicsConnection
-time1=      1835
+time1=      2229
 args1=
     action=     start
-    serial_port=    /dev/ttyUSB0
+    serial_port=    /tmp/ttySP1
     serial_timeout= 30
 
 id2=        ssh_start
 task2=      SshTunnel
-time2=      1840
+time2=      2230
 args2=
     action=     start
     address=    localhost
@@ -21,72 +21,72 @@ args2=
 
 id3=        ssh_stop
 task3=      SshTunnel
-time3=      1900
+time3=      2240
 args3=
     action=     stop
 
 id4=        rudics_stop
 task4=      RudicsConnection
-time4=      1910
+time4=      2241
 args4=
     action=     stop
 
-;----------- CHECKS
-
-id5=        check_supply_voltage
-task5=      Command
-interval5=  10
-onboot5=    0
-args5=
-    path=       check_supply_voltage -i -w 13.0 -c 10.0
-warn5=          SBDSender
-crit5=          Sleep
-crit_args5=
-    until_time= 1100
-
-; Power consumption - total
-id6=        check_power_consumption
-task6=      Command
-interval6=  10
-args6=
-    path=       check_power_consumption -w 10.0 -t ts7400 1
-warn6=      SBDSender
-
-id7=        check_cpu_temperature
-task7=      Command
-interval7=  2
-args7=
-    path=       check_cpu_temperature -w 80.0
-warn7=      SBDSender
-
-id8=        check_time
-task8=      Command
-onboot8=    1
-args8=
-    path=       check_time -w 2018
-; TODO: warn8=      EmergencyConnection
-
-id9=        check_free_storage_root
-task9=      Command
-interval9=  30
-args9=
-    path=       check_free_storage -w 20 -c 10 -i /
-warn9=      SBDSender
-
-id10=       check_free_storage_data
-task10=     Command
-interval10= 30
-args10=
-    path=       check_free_storage -w 20 -c 10 -i /data
-warn10=      SBDSender
-
-; TODO: check_power_consumption 2 - UHF modems, switch off requires multiple invocations
-; TODO: check_power_consumption 3 - Iridium modem
-
-;----------- SLEEP
-
-id11=       sleep
-task11=     Sleep
-time11=     2200
-args11=
-    until_time= 1000
+;;----------- CHECKS
+;;
+;id5=        check_supply_voltage
+;task5=      Command
+;interval5=  10
+;onboot5=    0
+;args5=
+;    path=       check_supply_voltage -i -w 13.0 -c 10.0
+;warn5=          SBDSender
+;crit5=          Sleep
+;crit_args5=
+;    until_time= 1100
+;;
+;; Power consumption - total
+;id6=        check_power_consumption
+;task6=      Command
+;interval6=  10
+;args6=
+;    path=       check_power_consumption -w 10.0 -t ts7400 1
+;warn6=      SBDSender
+;;
+;id7=        check_cpu_temperature
+;task7=      Command
+;interval7=  2
+;args7=
+;    path=       check_cpu_temperature -w 80.0
+;warn7=      SBDSender
+;;
+;id8=        check_time
+;task8=      Command
+;onboot8=    1
+;args8=
+;    path=       check_time -w 2018
+;; TODO: warn8=      EmergencyConnection
+;;
+;id9=        check_free_storage_root
+;task9=      Command
+;interval9=  30
+;args9=
+;    path=       check_free_storage -w 20 -c 10 -i /
+;warn9=      SBDSender
+;;
+;id10=       check_free_storage_data
+;task10=     Command
+;interval10= 30
+;args10=
+;    path=       check_free_storage -w 20 -c 10 -i /data
+;warn10=      SBDSender
+;;
+;; TODO: check_power_consumption 2 - UHF modems, switch off requires multiple invocations
+;; TODO: check_power_consumption 3 - Iridium modem
+;;
+;;----------- SLEEP
+;;
+;id11=       sleep
+;task11=     Sleep
+;time11=     2200
+;args11=
+;    until_time= 1000
