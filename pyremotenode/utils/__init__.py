@@ -42,15 +42,4 @@ def setup_logging(name,
         log.addHandler(file_hndlr)
 
     if syslog:
-        syslog_formatter = logging.Formatter(
-            fmt="{{asctime}} {name}: {{message}}".format(name=name),
-            datefmt="%h %d %T",
-            style='{'
-        )
-        # Take care of the Syslog configuration
-        syslog_hndlr = logging.handlers.SysLogHandler(
-            facility=logging.handlers.SysLogHandler.LOG_INFO
-        )
-        syslog_hndlr.setLevel(level)
-        syslog_hndlr.setFormatter(syslog_formatter)
-        log.addHandler(syslog_hndlr)
+        log.warning("Syslog logging not yet implemented")

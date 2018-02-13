@@ -208,11 +208,11 @@ class RudicsConnection(BaseTask):
             self._thread = None
             self.running = False
 
-            self.max_checks = max_checks
-            self.check_interval = check_interval
-            self.watch_interval = watch_interval
-            self.wait_to_stop = wait_to_stop
-            self.max_kill_tries = max_kill_tries
+            self.max_checks = int(max_checks)
+            self.check_interval = int(check_interval)
+            self.watch_interval = int(watch_interval)
+            self.wait_to_stop = int(wait_to_stop)
+            self.max_kill_tries = int(max_kill_tries)
 
             self.dialer = dialer
 
@@ -260,7 +260,7 @@ class RudicsConnection(BaseTask):
 
         def watch(self):
             while self.running:
-                for stdout_line in iter(self.proc.stdout.readline, ""):
+                for stdout_line in iter(self._proc.stdout.readline, ""):
                     logging.debug("Dialer: {}".format(stdout_line))
 
                 rechecks = 1
@@ -287,7 +287,7 @@ class RudicsConnection(BaseTask):
             if self._proc:
                 logging.info("Terminating process with PID {0}".format(self._proc.pid))
                 self._proc.terminate()
-                for stdout_line in iter(self.proc.stdout.readline, ""):
+                for stdout_line in iter(self._proc.stdout.readline, ""):
                     logging.debug("Dialer: {}".format(stdout_line))
 
                 self._proc.stdout.close()
