@@ -192,6 +192,7 @@ class RudicsConnection(BaseTask):
         def __init__(self,
                      device="ppp0",
                      max_checks=3,
+                     max_kill_tries=5,
                      check_interval=20,
                      watch_interval=30,
                      wait_to_stop=10,
@@ -211,6 +212,7 @@ class RudicsConnection(BaseTask):
             self.check_interval = check_interval
             self.watch_interval = watch_interval
             self.wait_to_stop = wait_to_stop
+            self.max_kill_tries = max_kill_tries
 
             self.dialer = dialer
 
@@ -325,8 +327,8 @@ class RudicsConnection(BaseTask):
                 self.modem.modem_lock.release()
                 return True
 
-            while len(pids) and retries < self._max_kill_tries:
-                if retries == self._max_kill_tries - 1:
+            while len(pids) and retries < self.max_kill_tries:
+                if retries == self.max_kill_tries - 1:
                     sig_to_stop = signal.SIGKILL
                 self._stop_dialer(sig_to_stop, pids)
                 tm.sleep(self.wait_to_stop)
