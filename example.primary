@@ -12,11 +12,11 @@ args1=
 
 id2=        ssh_start
 task2=      SshTunnel
-time2=      2230
+time2=      2350
 args2=
     action=     start
     address=    localhost
-    port=       22
+    port=       873,22
     user=       circadian
 
 id3=        ssh_stop
