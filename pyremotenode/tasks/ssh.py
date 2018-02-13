@@ -26,9 +26,11 @@ class SshTunnel(BaseTask):
 
         def start(self, **kwargs):
             logging.info("Opening AutoSSH tunnel to {0}:{1}".format(self._tunnel_address, self._tunnel_port))
+            reverse_specs = ""
 
-            reverse_specs = " ".join(["{}:*:{}".format(30000 + src, dest)
-                                      for src, dest in enumerate(self._tunnel_port.split(","))])
+            for num, dest in enumerate(self._tunnel_port.split(",")):
+                reverse_specs += "{}:*:{}".format(30000 + num, dest)
+                logging.debug("Built reverse spec: {}".format(reverse_specs))
 
             if self._ppp0_route:
                 rc = subprocess.call(shlex.split("ip route add {} dev ppp0".format(self._tunnel_address)))
