@@ -260,6 +260,9 @@ class RudicsConnection(BaseTask):
 
         def watch(self):
             while self.running:
+                for stdout_line in iter(self.proc.stdout.readline, ""):
+                    logging.debug("Dialer: {}".format(stdout_line))
+
                 rechecks = 1
                 while not self.ready() \
                         and rechecks <= self.max_checks:
@@ -284,19 +287,24 @@ class RudicsConnection(BaseTask):
             if self._proc:
                 logging.info("Terminating process with PID {0}".format(self._proc.pid))
                 self._proc.terminate()
-                self._proc = None
+                for stdout_line in iter(self.proc.stdout.readline, ""):
+                    logging.debug("Dialer: {}".format(stdout_line))
+
+                self._proc.stdout.close()
                 tm.sleep(self.wait_to_stop)
             self._terminate_dialer()
 
         def _start_dialer(self):
-            logging.debug("Starting dialer and hoping it has a \"square go\" at things...")
+            logging.debug("Starting dialer and hoping it has a 'square go' at things...")
 
             if self.dialer == "pppd":
-                self._proc = subprocess.Popen(shlex.split("pppd nodetach file /etc/ppp/peers/iridium &"))
+                cmd = shlex.split("pppd file /etc/ppp/peers/iridium")
             elif self.dialer == "wvdial":
-                self._proc = subprocess.Popen(shlex.split("wvdial"))
+                cmd = shlex.split("wvdial")
             else:
                 raise RuntimeError("Cannot continue connecting, invalid dialer {} selected".format(self.dialer))
+
+            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=sys.stdout, universal_newlines=True)
 
             if self._proc.pid:
                 logging.debug("We have a {} instance at pid {}".format(self.dialer, self._proc.pid))
