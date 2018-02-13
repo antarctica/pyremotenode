@@ -5,6 +5,7 @@ import logging
 import os
 import resource
 import sys
+import traceback
 
 from pyremotenode.schedule import Scheduler
 from pyremotenode.utils import Configuration, setup_logging
@@ -61,7 +62,12 @@ if __name__ == '__main__':
     setup_logging("PyRemoteNode",
                   level=getattr(logging, cfg['general']['log_level']),
                   syslog=True)
-    m = Scheduler(cfg,
-                  start_when_fail=args.start_when_fail,
-                  pid_file=args.pidfile)
-    m.run()
+
+    try:
+        m = Scheduler(cfg,
+                      start_when_fail=args.start_when_fail,
+                      pid_file=args.pidfile)
+        m.run()
+    except:
+        # Last opportunity to log errors
+        logging.error(traceback.format_exc())

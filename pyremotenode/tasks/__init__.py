@@ -13,9 +13,9 @@ class BaseTask(object):
     CRITICAL = 2
     INVALID = -1
 
-    def __init__(self, ident, scheduler=None, **kwargs):
+    def __init__(self, id, scheduler=None, **kwargs):
         self._sched = scheduler
-        self._id = ident
+        self._id = id
         self._state = None
 
     def __call__(self, action=None, **kwargs):
