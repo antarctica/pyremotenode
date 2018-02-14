@@ -251,7 +251,7 @@ class RudicsConnection(BaseTask):
                           if self.re_ifip.match(x)]
 
                 if len(ipline) > 0:
-                    logging.info("Active interface detected with {0}".format(ipline[0]))
+                    logging.debug("Active interface detected with {0}".format(ipline[0]))
                     return True
                 else:
                     logging.debug("Interface detected but no IP is present, so not ready to use...")
@@ -259,6 +259,7 @@ class RudicsConnection(BaseTask):
             return False
 
         def watch(self):
+            latched = False
             while self.running:
                 for stdout_line in iter(self._proc.stdout.readline, ""):
                     logging.debug("Dialer: {}".format(stdout_line))
@@ -278,7 +279,9 @@ class RudicsConnection(BaseTask):
                     self.running = False
                     self.stop()
                 else:
-                    logging.info("We have the {0} interface at {1}".format(self._device, self._interface_path))
+                    if not latched:
+                        logging.info("We have the {0} interface at {1}".format(self._device, self._interface_path))
+                    latched = True
                     tm.sleep(self.watch_interval)
 
         def stop(self, **kwargs):

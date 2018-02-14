@@ -29,7 +29,7 @@ class SshTunnel(BaseTask):
             reverse_specs = ""
 
             for num, dest in enumerate(self._tunnel_port.split(",")):
-                reverse_specs += "-R {}:*:{}".format(30000 + num, dest)
+                reverse_specs += " -R {}:*:{}".format(30000 + num, dest)
                 logging.debug("Built reverse spec: {}".format(reverse_specs))
 
             if self._ppp0_route:
@@ -46,7 +46,7 @@ class SshTunnel(BaseTask):
                    "-o", "ServerAliveInterval=10",
                    "-o", "ServerAliveCountMax=5",
                    "-o", "RequestTTY=no",
-                   reverse_specs,
+                   reverse_specs.strip(),
                    "-C", "-N", "{0}@{1}".format(self._tunnel_user, self._tunnel_address),
                    ]
             logging.debug("Running command {0}".format(" ".join(cmd)))
