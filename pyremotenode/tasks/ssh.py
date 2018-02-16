@@ -32,6 +32,7 @@ class SshTunnel(BaseTask):
                 reverse_specs.append("-R {}:*:{}".format(30000 + num, dest))
 
             if self._ppp0_route:
+                logging.debug("Running ppp0 default route management command")
                 rc = subprocess.call(shlex.split("ip route add {} dev ppp0".format(self._tunnel_address)))
                 if rc == 0:
                     logging.info("Created route down ppp0 interface for {}".format(self._tunnel_address))

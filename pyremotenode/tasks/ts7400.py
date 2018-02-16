@@ -6,6 +6,8 @@ import subprocess as sp
 from datetime import datetime, timedelta, time
 from pyremotenode.tasks import BaseTask
 
+from pyremotenode.tasks.iridium import SBDSender
+
 
 class Sleep(BaseTask):
     def __init__(self, **kwargs):
@@ -54,6 +56,14 @@ class Sleep(BaseTask):
 
         self.state = BaseTask.OK
         return self.state
+
+
+class StatusUpdate(BaseTask):
+    def __init__(self, **kwargs):
+        super(Sleep, self).__init__(**kwargs)
+
+    def default_action(self, **kwargs):
+        raise NotImplementedError("StatusUpdate not yet implemented")
 
 
 class TS7400Utils(object):

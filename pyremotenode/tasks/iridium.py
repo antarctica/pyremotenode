@@ -48,23 +48,24 @@ class ModemLock(object):
 class ModemConnection(object):
     class __ModemConnection:
         _re_signal = re.compile(r'\s*\+CSQ:(\d)\s*$', re.MULTILINE)
-        _re_sbdix_response = re.compile(r'^\+SBDIX: (\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
+        _re_sbdix_response = re.compile(r'^\+SBDIX:\s*(\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
 
-        # TODO: Pass configuration options to ModemConnection
-        def __init__(self, serial_port="/tmp/ttySP1", serial_timeout=20, **kwargs):
+        # TODO: Pass configuration options to ModemConnection from invokers
+        def __init__(self, serial_port, serial_timeout, serial_baud, modem_wait=30, **kwargs):
             self._thread = None
 
             logging.info("Creating connection to modem on {}".format(serial_port))
             self._data = serial.Serial(
                 port=serial_port,
                 timeout=float(serial_timeout),
-                baudrate=115200,
+                baudrate=serial_baud,
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE
             )
 
             self._modem_lock = ModemLock()       # Lock message buffer
+            self._modem_wait = modem_wait
             self._message_queue = queue.Queue()
             # TODO: This should be synchronized potentially, but we won't really run into those issues with it
             self._running = False
@@ -84,6 +85,7 @@ class ModemConnection(object):
                     if not self._data.is_open:
                         self._data.open()
                     i = 1
+                    msg = None
 
                     try:
                         # Check we have a good enough signal to work with (>3)
@@ -105,30 +107,34 @@ class ModemConnection(object):
                                 "Could not interpret signal from response: {}".format(signal_test))
 
                         if type(signal_level) == int and signal_level > 3:
-                            msg = self.message_queue.get(block=False)
+                            while not self.message_queue.empty():
+                                msg = self.message_queue.get(block=False)
 
-                            if msg[0] == "sbd":
-                                text = msg[1].get_message_text().replace("\n", " ")
+                                if msg[0] == "sbd":
+                                    text = msg[1].get_message_text().replace("\n", " ")
 
-                                response = self._send_receive_messages("AT+SBDWT={}".format(text))
-                                if response.rstrip().split("\n")[-1] != "OK":
-                                    raise ModemConnectionException("Error submitting message: {}".format(response))
+                                    response = self._send_receive_messages("AT+SBDWT={}".format(text))
+                                    if response.rstrip().split("\n")[-1] != "OK":
+                                        raise ModemConnectionException("Error submitting message: {}".format(response))
 
-                                response = self._send_receive_messages("AT+SBDIX")
-                                if response.rstrip().split("\n")[-1] != "OK":
-                                    raise ModemConnectionException("Error submitting message: {}".format(response))
+                                    response = self._send_receive_messages("AT+SBDIX")
+                                    if response.rstrip().split("\n")[-1] != "OK":
+                                        raise ModemConnectionException("Error submitting message: {}".format(response))
 
-                                logging.info("Message sent: {}".format(response))
-                                (mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued) = \
-                                    self._re_sbdix_response.search(response).groups()
-                                # TODO: MT Queued, schedule download
+                                    logging.info("Message received: {}".format(response))
+                                    (mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued) = \
+                                        self._re_sbdix_response.search(response).groups()
+                                    # TODO: MT Queued, schedule download
 
-                                response = self._send_receive_messages("AT+SBDD0")
-                                if response.rstrip().split("\n")[-1] == "OK":
-                                    logging.debug("Message buffer cleared")
-                            else:
-                                raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
-                            i += 1
+                                    response = self._send_receive_messages("AT+SBDD0")
+                                    if response.rstrip().split("\n")[-1] == "OK":
+                                        logging.debug("Message buffer cleared")
+                                else:
+                                    raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
+                                i += 1
+                    except ModemConnectionException:
+                        logging.error(sys.exc_info())
+                        self._message_queue.put(msg, timeout=5)
                     except queue.Empty:
                         logging.info("{} messages processed".format(i))
                     except serial.serialutil.SerialException:
@@ -139,7 +145,7 @@ class ModemConnection(object):
                             self._data.close()
                         self.modem_lock.release()
                 logging.debug("{} thread waiting...".format(self.__class__.__name__))
-                tm.sleep(5)
+                tm.sleep(self._modem_wait)
 
         def _send_receive_messages(self, message):
             """
@@ -161,7 +167,11 @@ class ModemConnection(object):
             self._data.write(("{}\n".format(message)).encode('latin-1'))
 
             logging.debug('Message sent: "{}"'.format(message.strip()))
-            reply = self._data.readline().decode('latin-1')
+            line = self._data.readline().decode('latin-1')
+            reply = line
+            while line.strip() not in ["OK", "ERROR"]:
+                line = self._data.readline().decode('latin-1')
+                reply += line
             logging.debug('Message received: "{}"'.format(reply.strip()))
             return reply
 
@@ -179,6 +189,7 @@ class ModemConnection(object):
 
     instance = None
 
+    # TODO: This should ideally deal with multiple modem instances based on parameterisation
     def __init__(self, **kwargs):
         if not self.instance:
             self.instance = ModemConnection.__ModemConnection(**kwargs)
@@ -387,7 +398,7 @@ class RudicsConnection(BaseTask):
 class SBDSender(BaseTask):
     def __init__(self, **kwargs):
         BaseTask.__init__(self, **kwargs)
-        self.modem = ModemConnection()
+        self.modem = ModemConnection(**kwargs)
 
     def default_action(self, invoking_task, **kwargs):
         logging.debug("Running default action for SBDMessage")
@@ -399,20 +410,31 @@ class SBDSender(BaseTask):
         self.modem.send_sbd(SBDMessage(
             message_text,
             warning,
-            critical))
+            critical
+        ))
+        self.modem.start()
+
+    def send_message(self, message, include_date=True):
+        logging.debug("Running send message for SBDMessage")
+        self.modem.send_sbd(SBDMessage(message, include_date=include_date))
         self.modem.start()
 
 
 class SBDMessage(object):
-    def __init__(self, msg, warning=False, critical=False):
+    def __init__(self, msg, include_date=True, warning=False, critical=False):
         self._msg = msg
         self._warn = warning
         self._critical = critical
 
-        self._dt = datetime.now()
+        if include_date:
+            self._dt = datetime.now()
+        else:
+            self._dt = None
 
     def get_message_text(self):
-        return "{}: {}".format(self._dt, self._msg)[:120]
+        if self._dt:
+            return "{}:{}".format(self._dt, self._msg[:100])
+        return "{}".format(self._msg)[:120]
 
 
 class EmergencyConnection(RudicsConnection):

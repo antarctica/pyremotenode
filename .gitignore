@@ -4,3 +4,4 @@ __pycache__
 build/
 dist/
 pyremotenode.egg-info/
+scratch.txt

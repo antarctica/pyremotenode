@@ -31,7 +31,7 @@ class BaseTask(object):
                 ret_val = getattr(self, action)(**kwargs)
             except Exception:
                 logging.error("Unhandled exception from within action {}".format(self._id))
-                logging.error(traceback.format_exception())
+                logging.error(traceback.format_exc())
 
             if self._sched:
                 if ret_val == self.OK:
@@ -66,8 +66,9 @@ class BaseTask(object):
 
 
 from pyremotenode.tasks.iridium import RudicsConnection, SBDSender
+from pyremotenode.tasks.loh import SendLoHBaselines
 from pyremotenode.tasks.ssh import SshTunnel
 from pyremotenode.tasks.ts7400 import Sleep
 from pyremotenode.tasks.utils import Command
 
-__all__ = ["Command", "Sleep", "RudicsConnection", "SBDSender", "SshTunnel"]
+__all__ = ["Command", "SendLoHBaselines", "Sleep", "RudicsConnection", "SBDSender", "SshTunnel"]

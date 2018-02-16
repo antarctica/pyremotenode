@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import sys
+import time
 
 from subprocess import Popen, PIPE, STDOUT
 from threading import Thread
@@ -41,24 +42,40 @@ class DummyModem(object):
 
     def run(self):
         stdin = self._socat.stdin
+        sbd_count = 1
 
         with self._socat:
             for stdout in self._socat.stdout:
                 response = None
-                reply_lines = []
-                stdout = stdout.strip()
+                reply_lines = ["OK"]
+                command = stdout.strip()
 
-                logging.debug("Received: {}".format(stdout))
+                logging.debug("Received: {}".format(command))
 
                 # TODO: Change this to be a control sequence try block, it'll be nicer
-                while response != "END":
-                    response = input("Response: ").strip()
-                    if response != "END":
-                        reply_lines.append(response)
+                #while response != "END":
+                #    response = input("Response: ").strip()
+                #    if response != "END":
+                #        reply_lines.append(response)
+
+                if command.startswith("AT+CSQ"):
+                    logging.debug("Signal request")
+#                    time.sleep(1)
+                    reply_lines = ["+CSQ:5", "", "OK"]
+                elif command.startswith("AT+SBDWT="):
+                    logging.debug("Got message: {}".format(command[9:]))
+                elif command.startswith("AT+SBDIX"):
+                    logging.debug("Sending message with slight delay")
+#                    time.sleep(1)
+                    sbd_count += 1
+                    reply_lines = ["+SBDIX:0, {}, 0, 0, 0, 0".format(sbd_count), "", "OK"]
+                elif command.startswith("AT+SBDD0"):
+                    logging.debug("Cleared buffer")
 
                 if len(reply_lines):
-                    logging.debug("Sending {}".format("\n".join(reply_lines)))
-                    stdin.write(response)
+                    response = "\n".join(reply_lines)
+                    logging.debug("Sending {}".format(response))
+                    stdin.write(response+"\n")
                     stdin.flush()
                 else:
                     logging.info("You've input an invalid response")
