@@ -181,13 +181,13 @@ class ModemConnection(object):
 
             line = self._data.readline().decode('latin-1')
             reply = line
-            while line.strip() not in ["OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER"]:
-                line = self._data.readline().decode('latin-1').strip()
+            while line.rstrip() not in ["OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER"]:
+                line = self._data.readline().decode('latin-1').rstrip()
                 if len(line):
                     reply += line + "\n"
 
             reply = reply.strip()
-            logging.debug('Response received: "{}"'.format(reply))
+            logging.info('Response received: "{}"'.format(reply))
 
             return reply
 
@@ -204,19 +204,15 @@ class ModemConnection(object):
             return self._message_queue
 
     instance = None
-    dev_lock = t.Lock()
 
     # TODO: This should ideally deal with multiple modem instances based on parameterisation
     def __init__(self, **kwargs):
         logging.debug("ModemConnection constructor access")
-        with self.dev_lock:
-            logging.debug("ModemConnection acquired lock")
-
-            if not self.instance:
-                logging.debug("ModemConnection instantiation")
-                self.instance = ModemConnection.__ModemConnection(**kwargs)
-            else:
-                logging.debug("ModemConnection already instantiated")
+        if not ModemConnection.instance:
+            logging.debug("ModemConnection instantiation")
+            ModemConnection.instance = ModemConnection.__ModemConnection(**kwargs)
+        else:
+            logging.debug("ModemConnection already instantiated")
 
     def __getattr__(self, item):
         return getattr(self.instance, item)
