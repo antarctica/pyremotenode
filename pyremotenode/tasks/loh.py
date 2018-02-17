@@ -10,6 +10,7 @@ from pyremotenode.tasks import BaseTask
 from pyremotenode.tasks.iridium import SBDSender
 
 
+# TODO: Might be better to thread this, and add an execution check for the pre-processing
 class SendLoHBaselines(BaseTask):
     _re_stations = re.compile(r'(\w{4})_\d{6}_(\w{4})_.+\.csv')
     _re_bs_data = re.compile(r'')

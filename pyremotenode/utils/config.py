@@ -70,8 +70,10 @@ class Configuration(object):
 
     instance = None
 
-    def __init__(self, path):
+    def __init__(self, path=None):
         if not Configuration.instance:
+            if not path:
+                raise RuntimeError("Configuration has not been instantiated")
             Configuration.instance = Configuration.__Configuration(path)
 
     def __getattr__(self, item):

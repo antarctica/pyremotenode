@@ -13,10 +13,11 @@ import time as tm
 from datetime import datetime
 
 from pyremotenode.tasks import BaseTask
+from pyremotenode.utils.config import Configuration
 
 
 class ModemLock(object):
-    # TODO: Pass the configuration options for modem port
+    # TODO: Pass the configuration options for modem port (this is very LRAD specific)
     def __init__(self, dio_port="1_20"):
         self._lock = t.RLock()
         self._modem_port = dio_port
@@ -50,9 +51,14 @@ class ModemConnection(object):
         _re_signal = re.compile(r'\s*\+CSQ:(\d)\s*$', re.MULTILINE)
         _re_sbdix_response = re.compile(r'^\+SBDIX:\s*(\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
 
-        # TODO: Pass configuration options to ModemConnection from invokers
-        def __init__(self, serial_port, serial_timeout, serial_baud, modem_wait=30, **kwargs):
+        def __init__(self):
             self._thread = None
+
+            cfg = Configuration().config
+            serial_port = cfg['ModemConnection']['serial_port']
+            serial_timeout = cfg['ModemConnection']['serial_timeout']
+            serial_baud = cfg['ModemConnection']['serial_baud']
+            modem_wait = cfg['ModemConnection']['modem_wait']
 
             logging.info("Creating connection to modem on {}".format(serial_port))
             self._data = serial.Serial(
@@ -65,7 +71,7 @@ class ModemConnection(object):
             )
 
             self._modem_lock = ModemLock()       # Lock message buffer
-            self._modem_wait = modem_wait
+            self._modem_wait = float(modem_wait)
             self._message_queue = queue.Queue()
             # TODO: This should be synchronized potentially, but we won't really run into those issues with it
             self._running = False
@@ -166,7 +172,7 @@ class ModemConnection(object):
             self._data.flushInput()
             self._data.write(("{}\n".format(message)).encode('latin-1'))
 
-            logging.debug('Message sent: "{}"'.format(message.strip()))
+            logging.info('Message sent: "{}"'.format(message.strip()))
             line = self._data.readline().decode('latin-1')
             reply = line
             while line.strip() not in ["OK", "ERROR"]:
@@ -209,7 +215,7 @@ class RudicsConnection(BaseTask):
                      wait_to_stop=10,
                      dialer="pppd",
                      **kwargs):
-            self.modem = ModemConnection(**kwargs)
+            self.modem = ModemConnection()
 
             logging.debug("Creating {0}".format(self.__class__.__name__))
             self._device = device
@@ -398,7 +404,7 @@ class RudicsConnection(BaseTask):
 class SBDSender(BaseTask):
     def __init__(self, **kwargs):
         BaseTask.__init__(self, **kwargs)
-        self.modem = ModemConnection(**kwargs)
+        self.modem = ModemConnection()
 
     def default_action(self, invoking_task, **kwargs):
         logging.debug("Running default action for SBDMessage")

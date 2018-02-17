@@ -4,23 +4,21 @@ log_level=      DEBUG
 [actions]
 id1=        send_loh_baselines
 task1=      SendLoHBaselines
-onboot1=    1
+time1=      1600
 args1=
-    serial_port= /tmp/ttySP1
-    serial_timeout= 20
-    serial_baud= 9600
     source= /data/loh/baselines
     fields= dt,tm,e,n,u,q,ns,sde,sdn,sdu
 
 ;;----------- CHECKS
 ;;
-;id5=        check_supply_voltage
-;task5=      Command
-;interval5=  10
-;onboot5=    0
-;args5=
-;    path=       check_supply_voltage -i -w 13.0 -c 10.0
-;warn5=          SBDSender
+id2=        check_supply_voltage
+task2=      Command
+interval2=  10
+onboot2=    1
+args2=
+    path=       check_supply_voltage -i -w 13.0 -c 10.0
+ok2=            SBDSender
+warn2=          SBDSender
 ;crit5=          Sleep
 ;crit_args5=
 ;    until_time= 1100
@@ -66,3 +64,9 @@ args1=
 ;time10=     2200
 ;args10=
 ;    until_time= 1000
+
+[ModemConnection]
+serial_port= /tmp/ttySP1
+serial_timeout= 20
+serial_baud= 9600
+modem_wait= 30

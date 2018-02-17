@@ -60,13 +60,13 @@ class DummyModem(object):
 
                 if command.startswith("AT+CSQ"):
                     logging.debug("Signal request")
-#                    time.sleep(1)
+                    time.sleep(1)
                     reply_lines = ["+CSQ:5", "", "OK"]
                 elif command.startswith("AT+SBDWT="):
                     logging.debug("Got message: {}".format(command[9:]))
                 elif command.startswith("AT+SBDIX"):
                     logging.debug("Sending message with slight delay")
-#                    time.sleep(1)
+                    time.sleep(1)
                     sbd_count += 1
                     reply_lines = ["+SBDIX:0, {}, 0, 0, 0, 0".format(sbd_count), "", "OK"]
                 elif command.startswith("AT+SBDD0"):
