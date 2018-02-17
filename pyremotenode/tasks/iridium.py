@@ -90,6 +90,9 @@ class ModemConnection(object):
                 if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
                     if not self._data.is_open:
                         self._data.open()
+                        self._data.write("\r\r")
+                        self._data.reset_output_buffer()
+
                     i = 1
                     msg = None
 
@@ -170,16 +173,19 @@ class ModemConnection(object):
             if not self._data.isOpen():
                 raise ModemConnectionException('Cannot send message; data port is not open')
             self._data.flushInput()
-            self._data.write(("{}\n".format(message)).encode('latin-1'))
+            self._data.write("{}\r".format(message).encode('latin-1'))
 
             logging.info('Message sent: "{}"'.format(message.strip()))
+
             line = self._data.readline().decode('latin-1')
-            logging.debug('Line received: "{}"'.format(line))
             reply = line
-            while line.strip() not in ["OK", "ERROR"]:
-                line = self._data.readline().decode('latin-1')
-                logging.debug('Line received: "{}"'.format(line))
-                reply += line
+            while line.strip() not in ["OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER"]:
+                line = self._data.readline().decode('latin-1').strip()
+                if len(line):
+                    reply += line + "\n"
+
+            reply = reply.strip()
+            logging.debug('Response received: "{}"'.format(reply))
 
             return reply
 
