@@ -28,7 +28,7 @@ class SendLoHBaselines(BaseTask):
             field_selection.append(data_fields.index(x))
         df = itemgetter(*field_selection)
 
-        dt = datetime.now() - timedelta(days=days_behind)
+        dt = datetime.now() - timedelta(days=int(days_behind))
         (year, month, day) = (str(dt.year)[2:], "{:02d}".format(dt.month), "{:02d}".format(dt.day))
 
         date_str = month + day + year

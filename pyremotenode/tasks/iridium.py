@@ -112,7 +112,7 @@ class ModemConnection(object):
                             raise ModemConnectionException(
                                 "Could not interpret signal from response: {}".format(signal_test))
 
-                        if type(signal_level) == int and signal_level > 3:
+                        if type(signal_level) == int and signal_level >= 3:
                             while not self.message_queue.empty():
                                 msg = self.message_queue.get(block=False)
 
@@ -174,11 +174,13 @@ class ModemConnection(object):
 
             logging.info('Message sent: "{}"'.format(message.strip()))
             line = self._data.readline().decode('latin-1')
+            logging.debug('Line received: "{}"'.format(line))
             reply = line
             while line.strip() not in ["OK", "ERROR"]:
                 line = self._data.readline().decode('latin-1')
+                logging.debug('Line received: "{}"'.format(line))
                 reply += line
-            logging.debug('Message received: "{}"'.format(reply.strip()))
+
             return reply
 
         def send_sbd(self, message):
