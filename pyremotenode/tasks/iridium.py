@@ -173,7 +173,7 @@ class ModemConnection(object):
             if not self._data.isOpen():
                 raise ModemConnectionException('Cannot send message; data port is not open')
             self._data.flushInput()
-            self._data.write("{}\r".format(message).encode('latin-1'))
+            self._data.write("{}\r".format(message.strip()))
 
             logging.info('Message sent: "{}"'.format(message.strip()))
 

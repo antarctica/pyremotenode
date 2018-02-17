@@ -29,14 +29,14 @@ class Command(BaseTask):
         ret = None
 
         try:
-            ret = subprocess.check_output(args=shlex.split(" ".join(self._args)))
+            ret = subprocess.check_output(args=shlex.split(" ".join(self._args)), universal_newlines=True)
         except subprocess.CalledProcessError as e:
             logging.warning("Got error code {0} and message: {1}".format(e.returncode, e.output))
             # TODO: Evaluate how this will be handled in the end
             raise TaskException("The called command failed with an out of bound return code...")
 
         logging.debug("Check return output: {0}".format(ret))
-        self.state = ret
+        self.state = ret.strip()
         return self.process_check_output(ret)
 
     def process_check_output(self, output):
