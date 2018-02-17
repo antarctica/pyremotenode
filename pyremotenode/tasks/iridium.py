@@ -117,6 +117,7 @@ class ModemConnection(object):
 
                         if type(signal_level) == int and signal_level >= 3:
                             while not self.message_queue.empty():
+                                logging.debug("Still have messages, getting another...")
                                 msg = self.message_queue.get(block=False)
 
                                 if msg[0] == "sbd":
@@ -145,7 +146,7 @@ class ModemConnection(object):
                         logging.error(sys.exc_info())
                         self._message_queue.put(msg, timeout=5)
                     except queue.Empty:
-                        logging.info("{} messages processed".format(i))
+                        logging.info("{} messages processed, no messages left in queue".format(i))
                     except serial.serialutil.SerialException:
                         logging.error("Modem inoperational or another error occurred")
                         print(sys.exc_info())
@@ -173,7 +174,7 @@ class ModemConnection(object):
             if not self._data.isOpen():
                 raise ModemConnectionException('Cannot send message; data port is not open')
             self._data.flushInput()
-            self._data.write("{}\r".format(message.strip()))
+            self._data.write("{}\r".format(message.strip()).encode())
 
             logging.info('Message sent: "{}"'.format(message.strip()))
 
@@ -429,7 +430,6 @@ class SBDSender(BaseTask):
         self.modem.start()
 
     def send_message(self, message, include_date=True):
-        logging.debug("Running send message for SBDMessage")
         self.modem.send_sbd(SBDMessage(message, include_date=include_date))
         self.modem.start()
 
