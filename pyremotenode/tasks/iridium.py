@@ -48,7 +48,7 @@ class ModemLock(object):
 
 class ModemConnection(object):
     class __ModemConnection:
-        _re_signal = re.compile(r'\s*\+CSQ:(\d)\s*$', re.MULTILINE)
+        _re_signal = re.compile(r'^\+CSQ:(\d)', re.MULTILINE)
         _re_sbdix_response = re.compile(r'^\+SBDIX:\s*(\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
 
         def __init__(self):
@@ -90,7 +90,7 @@ class ModemConnection(object):
                 if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
                     if not self._data.is_open:
                         self._data.open()
-                        self._data.write("\rATE0\r")
+                        self._send_receive_messages("ATE0")
                         self._data.reset_input_buffer()
                         self._data.reset_output_buffer()
 
@@ -103,7 +103,7 @@ class ModemConnection(object):
                         if signal_test == "":
                             raise ModemConnectionException(
                                 "No response received for signal quality check")
-                        signal_level = self._re_signal.match(signal_test)
+                        signal_level = self._re_signal.search(signal_test)
 
                         if signal_level:
                             try:
@@ -125,11 +125,11 @@ class ModemConnection(object):
                                     text = msg[1].get_message_text().replace("\n", " ")
 
                                     response = self._send_receive_messages("AT+SBDWT={}".format(text))
-                                    if response.rstrip().split("\n")[-1] != "OK":
+                                    if response.split("\n")[-1] != "OK":
                                         raise ModemConnectionException("Error submitting message: {}".format(response))
 
                                     response = self._send_receive_messages("AT+SBDIX")
-                                    if response.rstrip().split("\n")[-1] != "OK":
+                                    if response.split("\n")[-1] != "OK":
                                         raise ModemConnectionException("Error submitting message: {}".format(response))
 
                                     logging.info("Message received: {}".format(response))
@@ -138,7 +138,7 @@ class ModemConnection(object):
                                     # TODO: MT Queued, schedule download
 
                                     response = self._send_receive_messages("AT+SBDD0")
-                                    if response.rstrip().split("\n")[-1] == "OK":
+                                    if response.split("\n")[-1] == "OK":
                                         logging.debug("Message buffer cleared")
                                 else:
                                     raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
@@ -429,8 +429,8 @@ class SBDSender(BaseTask):
 
         self.modem.send_sbd(SBDMessage(
             message_text,
-            warning,
-            critical
+            warning=warning,
+            critical=critical
         ))
         self.modem.start()
 
