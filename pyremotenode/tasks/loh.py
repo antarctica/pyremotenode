@@ -18,7 +18,7 @@ class SendLoHBaselines(BaseTask):
         super(SendLoHBaselines, self).__init__(**kwargs)
         self._source = source
 
-    def default_action(self, fields, **kwargs):
+    def default_action(self, fields, days_behind=1, **kwargs):
         logging.info("Processing LoH baseline data to send via SBD")
         sbd = SBDSender(id='loh_baseline_sbd', **kwargs)
         data_fields = ('dt', 'tm', 'e', 'n', 'u', 'q', 'ns', 'sde', 'sdn', 'sdu', 'sden', 'sdnu', 'sdue', 'age', 'ratio')
@@ -27,7 +27,7 @@ class SendLoHBaselines(BaseTask):
             field_selection.append(data_fields.index(x))
         df = itemgetter(*field_selection)
 
-        dt = datetime.now() - timedelta(days=1)
+        dt = datetime.now() - timedelta(days=days_behind)
         (year, month, day) = (str(dt.year)[2:], "{:02d}".format(dt.month), "{:02d}".format(dt.day))
 
         date_str = month + day + year
