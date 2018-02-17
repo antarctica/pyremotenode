@@ -90,7 +90,8 @@ class ModemConnection(object):
                 if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
                     if not self._data.is_open:
                         self._data.open()
-                        self._data.write("\r\r")
+                        self._data.write("\rATE0\r")
+                        self._data.reset_input_buffer()
                         self._data.reset_output_buffer()
 
                     i = 1
@@ -203,11 +204,19 @@ class ModemConnection(object):
             return self._message_queue
 
     instance = None
+    dev_lock = t.Lock()
 
     # TODO: This should ideally deal with multiple modem instances based on parameterisation
     def __init__(self, **kwargs):
-        if not self.instance:
-            self.instance = ModemConnection.__ModemConnection(**kwargs)
+        logging.debug("ModemConnection constructor access")
+        with self.dev_lock:
+            logging.debug("ModemConnection acquired lock")
+
+            if not self.instance:
+                logging.debug("ModemConnection instantiation")
+                self.instance = ModemConnection.__ModemConnection(**kwargs)
+            else:
+                logging.debug("ModemConnection already instantiated")
 
     def __getattr__(self, item):
         return getattr(self.instance, item)

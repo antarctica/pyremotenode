@@ -68,6 +68,6 @@ if __name__ == '__main__':
                       start_when_fail=args.start_when_fail,
                       pid_file=args.pidfile)
         m.run()
-    except:
+    except Exception:
         # Last opportunity to log errors
         logging.error(traceback.format_exc())
