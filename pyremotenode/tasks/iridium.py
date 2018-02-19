@@ -64,6 +64,7 @@ class ModemConnection(object):
             self._data = serial.Serial(
                 port=serial_port,
                 timeout=float(serial_timeout),
+                write_timeout=float(serial_timeout),
                 baudrate=serial_baud,
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
@@ -73,7 +74,8 @@ class ModemConnection(object):
             self._modem_lock = ModemLock()       # Lock message buffer
             self._modem_wait = float(modem_wait)
             self._message_queue = queue.Queue()
-            # TODO: This should be synchronized potentially, but we won't really run into those issues with it
+            # TODO: This should be synchronized, but we won't really run into those issues with it as we never switch
+            # the modem off whilst it's running
             self._running = False
 
         def start(self):
@@ -92,8 +94,6 @@ class ModemConnection(object):
                         logging.debug("Opening modem serial connection")
                         self._data.open()
                         self._send_receive_messages("ATE0")
-                        self._data.reset_input_buffer()
-                        self._data.reset_output_buffer()
 
                     i = 1
                     msg = None
@@ -117,10 +117,12 @@ class ModemConnection(object):
                             raise ModemConnectionException(
                                 "Could not interpret signal from response: {}".format(signal_test))
 
+                        logging.debug("Current queue size approx.: {}".format(str(self.message_queue.qsize())))
+
                         if type(signal_level) == int and signal_level >= 3:
                             while not self.message_queue.empty():
                                 logging.debug("Still have messages, getting another...")
-                                msg = self.message_queue.get(block=False)
+                                msg = self.message_queue.get(timeout=1)
 
                                 if msg[0] == "sbd":
                                     text = msg[1].get_message_text().replace("\n", " ")
@@ -185,9 +187,11 @@ class ModemConnection(object):
             logging.info('Message sent: "{}"'.format(message.strip()))
 
             line = self._data.readline().decode('latin-1')
+            logging.debug("Line received: '{}'".format(line.strip()))
             reply = line
             while line.rstrip() not in ["OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER"]:
                 line = self._data.readline().decode('latin-1').rstrip()
+                logging.debug("Line received: '{}'".format(line.strip()))
                 if len(line):
                     reply += line + "\n"
 
