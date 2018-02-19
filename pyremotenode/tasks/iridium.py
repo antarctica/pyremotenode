@@ -101,6 +101,8 @@ class ModemConnection(object):
                         logging.debug("Opening modem serial connection")
                         self._data.open()
                         self._send_receive_messages("ATE0")
+                    else:
+                        raise ModemConnectionException("Modem appears to already be open, somewhat strange.")
 
                     i = 1
                     msg = None
@@ -156,6 +158,7 @@ class ModemConnection(object):
                         else:
                             logging.warning("Not enough signal to perform activities")
                     except ModemConnectionException:
+                        logging.error("Out of logic modem operations, breaking to restart...")
                         logging.error(sys.exc_info())
                     except queue.Empty:
                         logging.info("{} messages processed, no messages left in queue".format(i))
@@ -163,6 +166,7 @@ class ModemConnection(object):
                         logging.error("Modem inoperational or another error occurred")
                         logging.error(sys.exc_info())
                     finally:
+                        logging.info("Reached end of modem usage for this iteration...")
                         if msg:
                             self._message_queue.put(msg, timeout=5)
                         if self._data.is_open:
@@ -484,7 +488,7 @@ class SBDMessage(object):
 
     def get_message_text(self):
         if self._dt:
-            return "{}:{}".format(self._dt, self._msg[:100])
+            return "{}:{}".format(self._dt.strftime("%d-%m-%Y %H:%M:%S"), self._msg[:100])
         return "{}".format(self._msg)[:120]
 
 
