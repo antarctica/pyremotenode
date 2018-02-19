@@ -22,10 +22,14 @@ class ModemLock(object):
         self._lock = t.RLock()
         self._modem_port = dio_port
 
+        cfg = Configuration().config
+        self.grace_period = int(cfg['ModemConnection']['grace_period']) \
+            if 'grace_period' in cfg['ModemConnection'] else 3
+
     def acquire(self, **kwargs):
         logging.info("Acquiring and switching on modem {}".format(self._modem_port))
         res = self._lock.acquire(**kwargs)
-        tm.sleep(1)
+        tm.sleep(self.grace_period)
         cmd = "tshwctl --setdio {}".format(self._modem_port)
         rc = subprocess.call(shlex.split(cmd))
         logging.debug("tshwctl returned: {}".format(rc))
@@ -36,7 +40,7 @@ class ModemLock(object):
         cmd = "tshwctl --clrdio {}".format(self._modem_port)
         rc = subprocess.call(shlex.split(cmd))
         logging.debug("tshwctl returned: {}".format(rc))
-        tm.sleep(1)
+        tm.sleep(self.grace_period)
         return self._lock.release(**kwargs)
 
     def __enter__(self):
@@ -77,6 +81,9 @@ class ModemConnection(object):
             # TODO: This should be synchronized, but we won't really run into those issues with it as we never switch
             # the modem off whilst it's running
             self._running = False
+
+            self.read_attempts = int(cfg['ModemConnection']['read_attempts']) \
+                if 'read_attempts' in cfg['ModemConnection'] else 5
 
         def start(self):
             # TODO: Draft implementation of the threading for message sending...
@@ -182,18 +189,34 @@ class ModemConnection(object):
             if not self._data.isOpen():
                 raise ModemConnectionException('Cannot send message; data port is not open')
             self._data.flushInput()
+            self._data.flushOutput()
             self._data.write("{}\r".format(message.strip()).encode())
 
             logging.info('Message sent: "{}"'.format(message.strip()))
+
+            # It seems possible that we don't get a response back sometimes, not sure why. Facilitate breaking comms
+            # for another attempt in this case, else we'll end up in an infinite loop
+            read_attempts = 0
+            bytes_read = 0
 
             line = self._data.readline().decode('latin-1')
             logging.debug("Line received: '{}'".format(line.strip()))
             reply = line
             while line.rstrip() not in ["OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER"]:
                 line = self._data.readline().decode('latin-1').rstrip()
-                logging.debug("Line received: '{}'".format(line.strip()))
+                bytes_read += len(line)
+                logging.debug("Line received: '{}'".format(line))
                 if len(line):
+                    read_attempts == 0
                     reply += line + "\n"
+                else:
+                    read_attempts += 1
+                    if read_attempts >= self.read_attempts:
+                        logging.warning("We've read 0 bytes continuously on {} attempts, abandoning reads...".format(
+                            self.read_attempts
+                        ))
+                        # It's up to the caller to handle this scenario, just give back what's available...
+                        break
 
             reply = reply.strip()
             logging.info('Response received: "{}"'.format(reply))
