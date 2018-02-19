@@ -25,7 +25,7 @@ class ModemLock(object):
     def acquire(self, **kwargs):
         logging.info("Acquiring and switching on modem {}".format(self._modem_port))
         res = self._lock.acquire(**kwargs)
-        tm.sleep(0.1)
+        tm.sleep(1)
         cmd = "tshwctl --setdio {}".format(self._modem_port)
         rc = subprocess.call(shlex.split(cmd))
         logging.debug("tshwctl returned: {}".format(rc))
@@ -36,7 +36,7 @@ class ModemLock(object):
         cmd = "tshwctl --clrdio {}".format(self._modem_port)
         rc = subprocess.call(shlex.split(cmd))
         logging.debug("tshwctl returned: {}".format(rc))
-        tm.sleep(0.1)
+        tm.sleep(1)
         return self._lock.release(**kwargs)
 
     def __enter__(self):
@@ -89,6 +89,7 @@ class ModemConnection(object):
             while self._running:
                 if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
                     if not self._data.is_open:
+                        logging.debug("Opening modem serial connection")
                         self._data.open()
                         self._send_receive_messages("ATE0")
                         self._data.reset_input_buffer()
@@ -143,16 +144,20 @@ class ModemConnection(object):
                                 else:
                                     raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
                                 i += 1
+                        else:
+                            logging.warning("Not enough signal to perform activities")
                     except ModemConnectionException:
                         logging.error(sys.exc_info())
-                        self._message_queue.put(msg, timeout=5)
                     except queue.Empty:
                         logging.info("{} messages processed, no messages left in queue".format(i))
-                    except serial.serialutil.SerialException:
+                    except Exception:
                         logging.error("Modem inoperational or another error occurred")
-                        print(sys.exc_info())
+                        logging.error(sys.exc_info())
                     finally:
+                        if msg:
+                            self._message_queue.put(msg, timeout=5)
                         if self._data.is_open:
+                            logging.debug("Closing modem serial connection")
                             self._data.close()
                         self.modem_lock.release()
                 logging.debug("{} thread waiting...".format(self.__class__.__name__))
