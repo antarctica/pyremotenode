@@ -112,6 +112,8 @@ class ModemConnection(object):
 
         def run(self):
             while self._running:
+                msg = None
+
                 try:
                     if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
                         if not self._data.is_open:
@@ -122,7 +124,6 @@ class ModemConnection(object):
                             raise ModemConnectionException("Modem appears to already be open, somewhat strange.")
 
                         i = 1
-                        msg = None
 
                         # Check we have a good enough signal to work with (>3)
                         signal_test = self._send_receive_messages("AT+CSQ")
