@@ -17,6 +17,7 @@ class BaseTask(object):
         self._sched = scheduler
         self._id = id
         self._state = None
+        self._last_state = self._state
 
     def __call__(self, action=None, **kwargs):
         if not action:
@@ -33,6 +34,7 @@ class BaseTask(object):
                 logging.error("Unhandled exception from within action {}".format(self._id))
                 logging.error(traceback.format_exc())
 
+            # TODO: Fix misappropriation of state in implementations and use it with last_state to avoid flapping
             if self._sched:
                 if ret_val == self.OK:
                     self._sched.add_ok(self._id)

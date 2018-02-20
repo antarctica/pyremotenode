@@ -36,10 +36,10 @@ class ModemLock(object):
 
         logging.info("Acquiring and switching on modem {}".format(self._modem_port))
         res = self._lock.acquire(**kwargs)
-        tm.sleep(self.grace_period)
         cmd = "tshwctl --setdio {}".format(self._modem_port)
         rc = subprocess.call(shlex.split(cmd))
         logging.debug("tshwctl returned: {}".format(rc))
+        tm.sleep(self.grace_period)
         return res
 
     def release(self, **kwargs):
@@ -119,6 +119,8 @@ class ModemConnection(object):
                         if not self._data.is_open:
                             logging.debug("Opening modem serial connection")
                             self._data.open()
+                            # TODO: Turning off echo doesn't seem to work!?!
+                            self._send_receive_messages("AT\r\n")
                             self._send_receive_messages("ATE0")
                         else:
                             raise ModemConnectionException("Modem appears to already be open, somewhat strange.")
@@ -161,7 +163,6 @@ class ModemConnection(object):
                                     if response.split("\n")[-1] != "OK":
                                         raise ModemConnectionException("Error submitting message: {}".format(response))
 
-                                    logging.info("Message received: {}".format(response))
                                     (mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued) = \
                                         self._re_sbdix_response.search(response).groups()
                                     # TODO: MT Queued, schedule download
@@ -169,6 +170,9 @@ class ModemConnection(object):
                                     response = self._send_receive_messages("AT+SBDD0")
                                     if response.split("\n")[-1] == "OK":
                                         logging.debug("Message buffer cleared")
+
+                                    # Don't reprocess this message goddammit!
+                                    msg = None
                                 else:
                                     raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
                                 i += 1
@@ -178,7 +182,7 @@ class ModemConnection(object):
                     logging.error("Out of logic modem operations, breaking to restart...")
                     logging.error(sys.exc_info())
                 except queue.Empty:
-                    logging.info("{} messages processed, no messages left in queue".format(i))
+                    logging.info("{} messages processed, {} left in queue".format(i, self.message_queue.qsize()))
                 except Exception:
                     logging.error("Modem inoperational or another error occurred")
                     logging.error(sys.exc_info())
