@@ -55,7 +55,8 @@ class ModemLock(object):
         start = datetime.combine(dt.date(), datetime.strptime(self.offline_start, "%H%M").time())
         end = datetime.combine(dt.date(), datetime.strptime(self.offline_end, "%H%M").time())
         res = start <= dt <= end
-        logging.debug("Checking if {} is between {} and {}: {}".format(dt, start, end, res))
+        logging.debug("Checking if {} is between {} and {}: {}".format(
+            dt.strftime("%H:%M"), start.strftime("%H:%M"), end.strftime("%H:%M"), res))
         return res
 
     def __enter__(self):
@@ -111,18 +112,18 @@ class ModemConnection(object):
 
         def run(self):
             while self._running:
-                if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
-                    if not self._data.is_open:
-                        logging.debug("Opening modem serial connection")
-                        self._data.open()
-                        self._send_receive_messages("ATE0")
-                    else:
-                        raise ModemConnectionException("Modem appears to already be open, somewhat strange.")
+                try:
+                    if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
+                        if not self._data.is_open:
+                            logging.debug("Opening modem serial connection")
+                            self._data.open()
+                            self._send_receive_messages("ATE0")
+                        else:
+                            raise ModemConnectionException("Modem appears to already be open, somewhat strange.")
 
-                    i = 1
-                    msg = None
+                        i = 1
+                        msg = None
 
-                    try:
                         # Check we have a good enough signal to work with (>3)
                         signal_test = self._send_receive_messages("AT+CSQ")
                         if signal_test == "":
@@ -172,22 +173,26 @@ class ModemConnection(object):
                                 i += 1
                         else:
                             logging.warning("Not enough signal to perform activities")
-                    except ModemConnectionException:
-                        logging.error("Out of logic modem operations, breaking to restart...")
-                        logging.error(sys.exc_info())
-                    except queue.Empty:
-                        logging.info("{} messages processed, no messages left in queue".format(i))
-                    except Exception:
-                        logging.error("Modem inoperational or another error occurred")
-                        logging.error(sys.exc_info())
-                    finally:
-                        logging.info("Reached end of modem usage for this iteration...")
-                        if msg:
-                            self._message_queue.put(msg, timeout=5)
-                        if self._data.is_open:
-                            logging.debug("Closing modem serial connection")
-                            self._data.close()
+                except ModemConnectionException:
+                    logging.error("Out of logic modem operations, breaking to restart...")
+                    logging.error(sys.exc_info())
+                except queue.Empty:
+                    logging.info("{} messages processed, no messages left in queue".format(i))
+                except Exception:
+                    logging.error("Modem inoperational or another error occurred")
+                    logging.error(sys.exc_info())
+                finally:
+                    logging.info("Reached end of modem usage for this iteration...")
+                    if msg:
+                        self._message_queue.put(msg, timeout=5)
+                    if self._data.is_open:
+                        logging.debug("Closing modem serial connection")
+                        self._data.close()
+
+                    try:
                         self.modem_lock.release()
+                    except RuntimeError:
+                        logging.warning("Looks like the lock wasn't acquired, dealing with this...")
                 logging.debug("{} thread waiting...".format(self.__class__.__name__))
                 tm.sleep(self._modem_wait)
 
