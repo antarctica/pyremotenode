@@ -26,7 +26,14 @@ class ModemLock(object):
         self.grace_period = int(cfg['ModemConnection']['grace_period']) \
             if 'grace_period' in cfg['ModemConnection'] else 3
 
+        self.offline_start = cfg['ModemConnection']['offline_start']
+        self.offline_end = cfg['ModemConnection']['offline_end']
+
     def acquire(self, **kwargs):
+
+        if self._in_offline_time():
+            return False
+
         logging.info("Acquiring and switching on modem {}".format(self._modem_port))
         res = self._lock.acquire(**kwargs)
         tm.sleep(self.grace_period)
@@ -42,6 +49,14 @@ class ModemLock(object):
         logging.debug("tshwctl returned: {}".format(rc))
         tm.sleep(self.grace_period)
         return self._lock.release(**kwargs)
+
+    def _in_offline_time(self):
+        dt = datetime.now()
+        start = datetime.combine(dt.date(), datetime.strptime(self.offline_start, "%H%M"))
+        end = datetime.combine(dt.date(), datetime.strptime(self.offline_end, "%H%M"))
+        res = start <= dt <= end
+        logging.debug("Checking if {} is between {} and {}: {}".format(dt, start, end, res))
+        return res
 
     def __enter__(self):
         self.acquire()
