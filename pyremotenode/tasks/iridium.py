@@ -30,8 +30,8 @@ class ModemLock(object):
         self.offline_end = cfg['ModemConnection']['offline_end']
 
     def acquire(self, **kwargs):
-
         if self._in_offline_time():
+            logging.info("Barring use of the modem during pre-determined window")
             return False
 
         logging.info("Acquiring and switching on modem {}".format(self._modem_port))
@@ -52,8 +52,8 @@ class ModemLock(object):
 
     def _in_offline_time(self):
         dt = datetime.now()
-        start = datetime.combine(dt.date(), datetime.strptime(self.offline_start, "%H%M"))
-        end = datetime.combine(dt.date(), datetime.strptime(self.offline_end, "%H%M"))
+        start = datetime.combine(dt.date(), datetime.strptime(self.offline_start, "%H%M").time())
+        end = datetime.combine(dt.date(), datetime.strptime(self.offline_end, "%H%M").time())
         res = start <= dt <= end
         logging.debug("Checking if {} is between {} and {}: {}".format(dt, start, end, res))
         return res
