@@ -36,10 +36,18 @@ class ModemLock(object):
 
         logging.info("Acquiring and switching on modem {}".format(self._modem_port))
         res = self._lock.acquire(**kwargs)
-        cmd = "tshwctl --setdio {}".format(self._modem_port)
-        rc = subprocess.call(shlex.split(cmd))
-        logging.debug("tshwctl returned: {}".format(rc))
-        tm.sleep(self.grace_period)
+
+        if res:
+            cmd = "tshwctl --setdio {}".format(self._modem_port)
+            rc = subprocess.call(shlex.split(cmd))
+            logging.debug("tshwctl returned: {}".format(rc))
+
+            if rc != 0:
+                logging.warning("Non-zero acquisition command return value, releasing the lock!")
+                self._lock.release(**kwargs)
+                return False
+            logging.debug("Sleeping for grace period of {} seconds to allow modem boot".format(self.grace_period))
+            tm.sleep(self.grace_period)
         return res
 
     def release(self, **kwargs):
@@ -75,24 +83,15 @@ class ModemConnection(object):
             self._thread = None
 
             cfg = Configuration().config
-            serial_port = cfg['ModemConnection']['serial_port']
-            serial_timeout = cfg['ModemConnection']['serial_timeout']
-            serial_baud = cfg['ModemConnection']['serial_baud']
-            modem_wait = cfg['ModemConnection']['modem_wait']
+            self.serial_port = cfg['ModemConnection']['serial_port']
+            self.serial_timeout = cfg['ModemConnection']['serial_timeout']
+            self.serial_baud = cfg['ModemConnection']['serial_baud']
+            self.modem_wait = cfg['ModemConnection']['modem_wait']
 
-            logging.info("Creating connection to modem on {}".format(serial_port))
-            self._data = serial.Serial(
-                port=serial_port,
-                timeout=float(serial_timeout),
-                write_timeout=float(serial_timeout),
-                baudrate=serial_baud,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE
-            )
+            self._data = None
 
             self._modem_lock = ModemLock()       # Lock message buffer
-            self._modem_wait = float(modem_wait)
+            self._modem_wait = float(self.modem_wait)
             self._message_queue = queue.Queue()
             # TODO: This should be synchronized, but we won't really run into those issues with it as we never switch
             # the modem off whilst it's running
@@ -100,6 +99,8 @@ class ModemConnection(object):
 
             self.read_attempts = int(cfg['ModemConnection']['read_attempts']) \
                 if 'read_attempts' in cfg['ModemConnection'] else 5
+
+            logging.info("Ready to connect to modem on {}".format(self.serial_port))
 
         def start(self):
             # TODO: Draft implementation of the threading for message sending...
@@ -114,16 +115,31 @@ class ModemConnection(object):
             while self._running:
                 msg = None
 
-                try:
-                    if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
-                        if not self._data.is_open:
-                            logging.debug("Opening modem serial connection")
-                            self._data.open()
-                            # TODO: Turning off echo doesn't seem to work!?!
-                            self._send_receive_messages("AT\r\n")
-                            self._send_receive_messages("ATE0")
+                if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
+                    # TODO: This try-except is getting massive, would be nice to dissolve it at some point
+                    try:
+                        if not self._data:
+                            logging.info("Creating pyserial comms instance to modem")
+                            # Instantiation = opening of port hence why this is here and not in the constructor
+                            self._data = serial.Serial(
+                                port=self.serial_port,
+                                timeout=float(self.serial_timeout),
+                                write_timeout=float(self.serial_timeout),
+                                baudrate=self.serial_baud,
+                                bytesize=serial.EIGHTBITS,
+                                parity=serial.PARITY_NONE,
+                                stopbits=serial.STOPBITS_ONE
+                            )
                         else:
-                            raise ModemConnectionException("Modem appears to already be open, somewhat strange.")
+                            if not self._data.is_open:
+                                logging.info("Opening existing modem serial connection")
+                                self._data.open()
+                            else:
+                                raise ModemConnectionException("Modem appears to already be open, wasn't previously closed!?!")
+
+                        # TODO: Turning off echo doesn't seem to work!?!
+                        self._send_receive_messages("AT\r\n")
+                        self._send_receive_messages("ATE0")
 
                         i = 1
 
@@ -178,26 +194,26 @@ class ModemConnection(object):
                                 i += 1
                         else:
                             logging.warning("Not enough signal to perform activities")
-                except ModemConnectionException:
-                    logging.error("Out of logic modem operations, breaking to restart...")
-                    logging.error(sys.exc_info())
-                except queue.Empty:
-                    logging.info("{} messages processed, {} left in queue".format(i, self.message_queue.qsize()))
-                except Exception:
-                    logging.error("Modem inoperational or another error occurred")
-                    logging.error(sys.exc_info())
-                finally:
-                    logging.info("Reached end of modem usage for this iteration...")
-                    if msg:
-                        self._message_queue.put(msg, timeout=5)
-                    if self._data.is_open:
-                        logging.debug("Closing modem serial connection")
-                        self._data.close()
+                    except ModemConnectionException:
+                        logging.error("Out of logic modem operations, breaking to restart...")
+                        logging.error(sys.exc_info())
+                    except queue.Empty:
+                        logging.info("{} messages processed, {} left in queue".format(i, self.message_queue.qsize()))
+                    except Exception:
+                        logging.error("Modem inoperational or another error occurred")
+                        logging.error(sys.exc_info())
+                    finally:
+                        logging.info("Reached end of modem usage for this iteration...")
+                        if msg:
+                            self._message_queue.put(msg, timeout=5)
+                        if self._data.is_open:
+                            logging.debug("Closing modem serial connection")
+                            self._data.close()
 
-                    try:
-                        self.modem_lock.release()
-                    except RuntimeError:
-                        logging.warning("Looks like the lock wasn't acquired, dealing with this...")
+                        try:
+                            self.modem_lock.release()
+                        except RuntimeError:
+                            logging.warning("Looks like the lock wasn't acquired, dealing with this...")
                 logging.debug("{} thread waiting...".format(self.__class__.__name__))
                 tm.sleep(self._modem_wait)
 

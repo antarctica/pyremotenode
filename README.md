@@ -35,4 +35,8 @@ Set up a virtual environment:
 
 mkvirtualenv -p `which python3.2` -a . -r requirements.txt pyremotenode
 
+### Version History
 
+* <0.2.0 - Don't ever look at these
+* 0.2.0+ - Testing deployments, 0.2.33 (the last commit) was the root of 0.9
+* 0.9.0 - First stable release for LRAD, feature branches to manage improvements

@@ -1,0 +1,70 @@
+[general]
+log_level=      DEBUG
+
+[actions]
+;----------- CHECKS
+
+id1=        check_supply_voltage
+task1=      Command
+onboot1=    1
+args1=
+    path=       /home/pyremotenode/bin/check_supply_voltage -i -w 12.0 -c 10.5 -t ts7400
+warn1=          SBDSender
+crit1=          SBDSender
+
+id2=        check_cpu_temperature
+task2=      Command
+interval2=  60
+args2=
+    path=       /home/pyremotenode/bin/check_cpu_temperature -w 75.0 -c 85.0 -t ts7400
+warn2=      SBDSender
+crit2=      SBDSender
+
+id3=        check_time
+task3=      Command
+onboot3=    1
+args3=
+    path=       /home/pyremotenode/bin/check_time -w 2018 -t ts7400
+ok3=	    SBDSender
+warn3=      SBDSender
+
+id4=        check_free_storage_root
+task4=      Command
+interval4=  30
+args4=
+    path=       /home/pyremotenode/bin/check_free_storage -t ts7400 -w 20 -c 10 -i /
+warn4=      SBDSender
+crit4=      SBDSender
+
+id5=       check_free_storage_data
+task5=     Command
+interval5= 30
+args5=
+    path=       /home/pyremotenode/bin/check_free_storage -t ts7400 -w 20 -c 10 -i /data
+warn5=      SBDSender
+crit5=      SBDSender
+
+;------------ DAILY SLEEP
+
+id6=       sleep
+task6=     Sleep
+time6=     2000
+args6=
+    until_time= 1000
+
+;------------ RUDICS
+
+id7=        send_loh_baselines
+task7=      SendLoHBaselines
+time7=	    1645
+args7=
+    source= /data/loh/baselines
+    fields= dt,tm,e,n,u,q,ns,sde,sdn,sdu
+
+[ModemConnection]
+serial_port= /dev/ttySP1
+serial_timeout= 20
+serial_baud= 9600
+modem_wait= 60
+offline_start= 1155
+offline_end= 1605
