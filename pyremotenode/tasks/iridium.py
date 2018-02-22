@@ -185,11 +185,11 @@ class ModemConnection(object):
 
                                     (mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued) = \
                                         self._re_sbdix_response.search(response).groups()
-                                    # TODO: MT Queued, schedule download
+                                    # TODO: MT Queued, schedule read!
 
-                                    response = self._send_receive_messages("AT+SBDD0")
+                                    response = self._send_receive_messages("AT+SBDD2")
                                     if response.split("\n")[-1] == "OK":
-                                        logging.debug("Message buffer cleared")
+                                        logging.debug("Message buffers cleared")
 
                                     if int(mo_status) > 2:
                                         raise ModemConnectionException("Failed to send message with MO Status: {}, breaking...".format(mo_status))
