@@ -99,6 +99,11 @@ class ModemConnection(object):
 
             self.read_attempts = int(cfg['ModemConnection']['read_attempts']) \
                 if 'read_attempts' in cfg['ModemConnection'] else 5
+            self.sbd_timeout = int(cfg['ModemConnection']['sbd_timeout']) \
+                if 'sbd_timeout' in cfg['ModemConnection'] else 10
+            # TODO: This shouldn't ever be required but the fucking modem is driving me nuts
+            self.msg_timeout = float(cfg['ModemConnection']['msg_timeout']) \
+                if 'msg_timeout' in cfg['ModemConnection'] else 0.5
 
             logging.info("Ready to connect to modem on {}".format(self.serial_port))
 
@@ -191,6 +196,7 @@ class ModemConnection(object):
 
                                     # Don't reprocess this message goddammit!
                                     msg = None
+                                    tm.sleep(self.sbd_timeout)
                                 else:
                                     raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
                                 i += 1
@@ -266,7 +272,7 @@ class ModemConnection(object):
                         break
 
             reply = reply.strip()
-            tm.sleep(0.2)
+            tm.sleep(self.msg_timeout)
             logging.info('Response received: "{}"'.format(reply))
 
             return reply

@@ -14,7 +14,7 @@ setup(
         "run_pyremotenode",
     ],
     include_package_data = True,
-    version = '0.2.37',
+    version = '0.2.38',
     author = 'James Byrne',
     author_email = 'zdm@bas.ac.uk',
     url = 'http://www.antarctica.ac.uk',
