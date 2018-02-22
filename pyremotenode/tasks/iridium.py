@@ -130,7 +130,7 @@ class ModemConnection(object):
                                 parity=serial.PARITY_NONE,
                                 stopbits=serial.STOPBITS_ONE
                             )
-                            self._send_receive_messages("AT\r\n")
+                            self._send_receive_messages("AT")
                             self._send_receive_messages("ATE0")
                             self._send_receive_messages("AT+SBDC")
                         else:
@@ -139,9 +139,6 @@ class ModemConnection(object):
                                 self._data.open()
                             else:
                                 raise ModemConnectionException("Modem appears to already be open, wasn't previously closed!?!")
-                            # TODO: Turning off echo doesn't seem to work!?!
-                            self._send_receive_messages("AT\r\n")
-                            self._send_receive_messages("ATE0")
 
                         i = 1
 
