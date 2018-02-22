@@ -1,10 +1,10 @@
 [general]
-log_level=      DEBUG
+log_level=      INFO
 
 [actions]
 ;----------- CHECKS
 
-id1=        check_supply_voltage
+id1=        check_supply_voltage_boot
 task1=      Command
 onboot1=    1
 args1=
@@ -15,7 +15,7 @@ crit1=          Sleep
 crit_args1=
     until_time= 1000
 
-id2=        check_supply_voltage
+id2=        check_supply_voltage_loh
 task2=      Command
 time2=      1555
 args2=
@@ -61,7 +61,7 @@ crit6=      SBDSender
 
 ;------------ DAILY SLEEP
 
-id7=       sleep
+id7=       sleep_normal
 task7=     Sleep
 day_of_week7=   tue,wed,fri,sat,sun
 hour7=      17
@@ -119,7 +119,7 @@ args12=
     action=     stop
 
 ;------------ RUDICS SLEEP
-id13=       sleep
+id13=       sleep_rudics
 task13=     Sleep
 day_of_week13=   mon,thu
 hour13=      17

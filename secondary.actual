@@ -1,0 +1,82 @@
+[general]
+log_level=      INFO
+
+[actions]
+;----------- CHECKS
+
+id1=        check_supply_voltage_boot
+task1=      Command
+onboot1=    1
+args1=
+    path=       /home/pyremotenode/bin/check_supply_voltage -i -w 12.0 -c 10.5 -t ts7400
+ok1=            SBDSender
+warn1=          SBDSender
+crit1=          Sleep
+crit_args1=
+    until_time= 2300
+
+;------------ DAILY SLEEP
+
+id2=       sleep_normal
+task2=     Sleep
+day_of_week2=   tue,wed,fri,sat,sun
+hour2=      23
+minute2=    15
+args2=
+    until_time= 2300
+
+;------------ RUDICS
+
+id3=        rudics_open
+task3=      RudicsConnection
+day_of_week3=   mon,thu
+hour3=      23
+minute3=    02
+args3=
+    action=     start
+
+id4=        ssh_start
+task4=      SshTunnel
+day_of_week4=   mon,thu
+hour4=      23
+minute4=    05
+args4=
+    action=     start
+    address=    192.171.138.14
+; Numbered 33000 + idx
+    port=       22
+    user=       circadian
+    ppp0_route= true
+
+id5=        ssh_stop
+task5=      SshTunnel
+day_of_week5=   mon,thu
+hour5=      23
+minute5=    40
+args5=
+    action=     stop
+
+id6=        rudics_stop
+task6=      RudicsConnection
+day_of_week6=   mon,thu
+hour6=      23
+minute6=    42
+args6=
+    action=     stop
+
+;------------ RUDICS SLEEP
+id7=       sleep_rudics
+task7=     Sleep
+day_of_week7=   mon,thu
+hour7=      23
+minute7=    45
+args7=
+    until_time= 2300
+
+[ModemConnection]
+serial_port= /dev/ttySP1
+serial_timeout= 20
+serial_baud= 9600
+modem_wait= 60
+offline_start= 1155
+offline_end= 1605

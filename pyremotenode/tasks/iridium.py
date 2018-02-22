@@ -130,16 +130,18 @@ class ModemConnection(object):
                                 parity=serial.PARITY_NONE,
                                 stopbits=serial.STOPBITS_ONE
                             )
+                            self._send_receive_messages("AT\r\n")
+                            self._send_receive_messages("ATE0")
+                            self._send_receive_messages("AT+SBDC")
                         else:
                             if not self._data.is_open:
                                 logging.info("Opening existing modem serial connection")
                                 self._data.open()
                             else:
                                 raise ModemConnectionException("Modem appears to already be open, wasn't previously closed!?!")
-
-                        # TODO: Turning off echo doesn't seem to work!?!
-                        self._send_receive_messages("AT\r\n")
-                        self._send_receive_messages("ATE0")
+                            # TODO: Turning off echo doesn't seem to work!?!
+                            self._send_receive_messages("AT\r\n")
+                            self._send_receive_messages("ATE0")
 
                         i = 1
 
@@ -267,6 +269,7 @@ class ModemConnection(object):
                         break
 
             reply = reply.strip()
+            tm.sleep(0.2)
             logging.info('Response received: "{}"'.format(reply))
 
             return reply
@@ -371,28 +374,33 @@ class RudicsConnection(BaseTask):
 
         def watch(self):
             latched = False
+
             while self.running:
-                for stdout_line in iter(self._proc.stdout.readline, ""):
-                    logging.debug("Dialer: {}".format(stdout_line))
-
                 rechecks = 1
-                while not self.ready() \
-                        and rechecks <= self.max_checks:
-                    logging.debug(
-                        "We have yet to get an interface up on check {0} of {1}".format(rechecks, self.max_checks))
-                    tm.sleep(self.check_interval)
-                    rechecks += 1
+                if not latched:
+                    while not self.ready() \
+                            and rechecks <= self.max_checks:
+                        logging.debug(
+                            "We have yet to get an interface up on check {0} of {1}".format(rechecks, self.max_checks))
+                        tm.sleep(self.check_interval)
+                        rechecks += 1
 
-                if rechecks >= self.max_checks \
-                        and not self.ready():
-                    logging.warning("We have failed to bring up the {0} interface".format(self._device))
-                    # TODO: The Dialer process has failed to arrange an interface, we should kill the whole thing
-                    self.running = False
-                    self.stop()
+                    if rechecks >= self.max_checks \
+                            and not self.ready():
+                        logging.warning("We have failed to bring up the {0} interface".format(self._device))
+                        # The Dialer process has failed to arrange an interface, we should kill the whole thing
+                        self.running = False
+                        self.stop()
+                    else:
+                        if not latched:
+                            logging.info("We have the {0} interface at {1}".format(self._device, self._interface_path))
+                        latched = True
+                        self._run_ntpdate()
+                        tm.sleep(self.watch_interval)
                 else:
-                    if not latched:
-                        logging.info("We have the {0} interface at {1}".format(self._device, self._interface_path))
-                    latched = True
+                    if not self.ready():
+                        logging.info("Interface seems to have gone down, {} should attempt restart...".format(self.dialer))
+
                     tm.sleep(self.watch_interval)
 
         def stop(self, **kwargs):
@@ -401,10 +409,6 @@ class RudicsConnection(BaseTask):
             if self._proc:
                 logging.info("Terminating process with PID {0}".format(self._proc.pid))
                 self._proc.terminate()
-                for stdout_line in iter(self._proc.stdout.readline, ""):
-                    logging.debug("Dialer: {}".format(stdout_line))
-
-                self._proc.stdout.close()
                 tm.sleep(self.wait_to_stop)
             self._terminate_dialer()
 
@@ -418,7 +422,7 @@ class RudicsConnection(BaseTask):
             else:
                 raise RuntimeError("Cannot continue connecting, invalid dialer {} selected".format(self.dialer))
 
-            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=sys.stdout, universal_newlines=True)
+            self._proc = subprocess.Popen(cmd, universal_newlines=True)
 
             if self._proc.pid:
                 logging.debug("We have a {} instance at pid {}".format(self.dialer, self._proc.pid))
@@ -481,6 +485,17 @@ class RudicsConnection(BaseTask):
 
             logging.info("{} Dialer PIDs found: {}".format(len(dialer_pids), ",".join(dialer_pids)))
             return dialer_pids
+
+        def _run_ntpdate(self):
+            logging.info("Attempting to set system time from NTP")
+            try:
+                rc = subprocess.call(shlex.split("ntpdate time.nist.gov"))
+            # Broad and dirty
+            except subprocess.CalledProcessError:
+                logging.error("Issue setting time using ntpdate: {}".format(sys.exc_info()))
+
+            if rc != 0:
+                logging.error("Non-zero return code calling ntpdate: {}".format(rc))
 
     instance = None
 

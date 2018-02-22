@@ -111,6 +111,7 @@ class Scheduler(object):
                                    id=id,
                                    coalesce=False,
                                    max_instances=1,
+                                   misfire_grace_time=60,
                                    kwargs=args)
 
     # ==================================================================================
@@ -216,6 +217,7 @@ class Scheduler(object):
                                    id="boot_{}".format(action['id']),
                                    coalesce=False,
                                    max_instances=1,
+                                   misfire_grace_time=60,
                                    kwargs=kwargs)
 
         if 'interval' in action:
