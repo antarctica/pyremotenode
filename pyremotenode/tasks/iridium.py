@@ -187,6 +187,9 @@ class ModemConnection(object):
                                     if response.split("\n")[-1] == "OK":
                                         logging.debug("Message buffer cleared")
 
+                                    if int(mo_status) > 2:
+                                        raise ModemConnectionException("Failed to send message with MO Status: {}, breaking...".format(mo_status))
+
                                     # Don't reprocess this message goddammit!
                                     msg = None
                                 else:
