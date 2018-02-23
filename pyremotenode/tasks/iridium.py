@@ -135,6 +135,9 @@ class ModemConnection(object):
                                 parity=serial.PARITY_NONE,
                                 stopbits=serial.STOPBITS_ONE
                             )
+                            self._send_receive_messages("AT")
+                            self._send_receive_messages("ATE0")
+                            self._send_receive_messages("AT+SBDC")
                         else:
                             if not self._data.is_open:
                                 logging.info("Opening existing modem serial connection")
@@ -240,7 +243,7 @@ class ModemConnection(object):
                 raise ModemConnectionException('Cannot send message; data port is not open')
             self._data.flushInput()
             self._data.flushOutput()
-            self._data.write("{}\r".format(message.strip()).encode())
+            self._data.write("{}\r\n".format(message.strip()).encode())
 
             logging.info('Message sent: "{}"'.format(message.strip()))
 
