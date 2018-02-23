@@ -135,9 +135,6 @@ class ModemConnection(object):
                                 parity=serial.PARITY_NONE,
                                 stopbits=serial.STOPBITS_ONE
                             )
-                            self._send_receive_messages("AT")
-                            self._send_receive_messages("ATE0")
-                            self._send_receive_messages("AT+SBDC")
                         else:
                             if not self._data.is_open:
                                 logging.info("Opening existing modem serial connection")
