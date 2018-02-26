@@ -119,10 +119,11 @@ class ModemConnection(object):
             self.reg_check_interval = float(cfg['ModemConnection']['reg_check_interval']) \
                 if 'reg_check_interval' in cfg['ModemConnection'] else 10
             self.mt_destination = cfg['ModemConnection']['mt_destination'] \
-                if 'mt_destination' in cfg['ModemConnection'] else os.path.join("data", "pyremotenode", "messages")
+                if 'mt_destination' in cfg['ModemConnection'] else os.path.join(os.sep, "data", "pyremotenode", "messages")
 
             if not os.path.exists(self.mt_destination):
                 logging.info("Creating non-existent message destination: {}".format(self.mt_destination))
+                os.makedirs(self.mt_destination, exist_ok=True)
 
             logging.info("Ready to connect to modem on {}".format(self.serial_port))
 

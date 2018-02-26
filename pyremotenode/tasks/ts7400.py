@@ -65,7 +65,7 @@ class Sleep(BaseTask):
         logging.info("Sleeping for {} seconds".format(seconds))
         iso_dt = datetime.combine(dt, tm)
         iso_dt.replace(microsecond=0)
-        cmd = "gotosleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
+        cmd = "/home/pyremotenode/bin/goto_sleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
 
         logging.debug("Running Sleep command: {}".format(cmd))
         rc = sp.call(shlex.split(cmd))
