@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import shlex
 import subprocess as sp
@@ -42,9 +43,29 @@ class Sleep(BaseTask):
             dt = dt + timedelta(days=1)
             seconds = (datetime.combine(dt, tm) - datetime.now()).total_seconds()
 
+        # Parse reboot time
+        try:
+            dt_reboot = self._get_reboot_time()
+            dt_reboot_set = self._get_reboot_set_time()
+        except Exception:
+            logging.warning("No satisfactory information to set adjustment offset")
+            dt_reboot = None
+            dt_reboot_set = None
+
+        reboot_diff = 0
+        if dt_reboot and dt_reboot_set:
+            reboot_diff = int((dt_reboot - dt_reboot_set).total_seconds())
+
+        logging.debug("Difference between {} and {}: {} seconds".format(
+            dt_reboot.strftime("%H:%M:%S"),
+            dt_reboot_set.strftime("%H:%M:%S"),
+            reboot_diff))
+
         TS7400Utils.rtc_clock()
         logging.info("Sleeping for {} seconds".format(seconds))
-        cmd = "tshwctl -L -m --timewkup={}".format(str(int(seconds)))
+        iso_dt = datetime.combine(dt, tm)
+        iso_dt.microsecond = 0
+        cmd = "gotosleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
 
         logging.debug("Running Sleep command: {}".format(cmd))
         rc = sp.call(shlex.split(cmd))
@@ -56,6 +77,41 @@ class Sleep(BaseTask):
 
         self.state = BaseTask.OK
         return self.state
+
+    def _get_reboot_time(self):
+        path = os.path.expandvars(os.path.join("$HOME", "reboot.txt"))
+
+        if os.path.exists(path) and \
+                        (datetime.now() - datetime.fromtimestamp(os.stat(path).st_mtime)).total_seconds() < 86400:
+            with open(path, "r") as fh:
+                line = fh.readline().strip()
+        else:
+            return None
+
+        dt = self._parse_system_datetime(re.compile(r'^Rebooted at (.+)$'), line)
+        logging.debug("Unit was set to wake up at {}".format(datetime.isoformat(dt)))
+        return dt
+
+    def _get_reboot_set_time(self):
+        path = os.path.expandvars(os.path.join("$HOME", "sleepinfo.txt"))
+
+        if os.path.exists(path) and \
+                        (datetime.now() - datetime.fromtimestamp(os.stat(path).st_mtime)).total_seconds() < 2 * 86400:
+            with open(path, "r") as fh:
+                line = fh.readline().strip()
+                (secs, dt) = line.split(",")
+            dt = datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S")
+            dt = dt + timedelta(seconds=int(secs))
+            logging.debug("Unit was set to wake up at {}".format(datetime.isoformat(dt)))
+            return dt
+        return None
+
+    def _parse_system_datetime(self, regex, line):
+        dt_match = regex.search(line)
+
+        if dt_match:
+            return datetime.strptime(dt_match.group(1), "%a %b %d %H:%M:%S %Z %Y")
+        return None
 
 
 class StatusUpdate(BaseTask):

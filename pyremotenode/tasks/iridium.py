@@ -26,8 +26,10 @@ class ModemLock(object):
         self.grace_period = int(cfg['ModemConnection']['grace_period']) \
             if 'grace_period' in cfg['ModemConnection'] else 3
 
-        self.offline_start = cfg['ModemConnection']['offline_start']
-        self.offline_end = cfg['ModemConnection']['offline_end']
+        self.offline_start = cfg['ModemConnection']['offline_start'] \
+            if 'offline_start' in cfg['ModemConnection'] else None
+        self.offline_end = cfg['ModemConnection']['offline_end'] \
+            if 'offline_end' in cfg['ModemConnection'] else None
 
     def acquire(self, **kwargs):
         if self._in_offline_time():
@@ -55,16 +57,21 @@ class ModemLock(object):
         cmd = "tshwctl --clrdio {}".format(self._modem_port)
         rc = subprocess.call(shlex.split(cmd))
         logging.debug("tshwctl returned: {}".format(rc))
-        tm.sleep(self.grace_period)
+        # This doesn't need to be configurable, the DIO will be instantly switched off so we'll just give it a
+        # second or two to avoid super-quick turnaround
+        tm.sleep(2)
         return self._lock.release(**kwargs)
 
     def _in_offline_time(self):
         dt = datetime.now()
-        start = datetime.combine(dt.date(), datetime.strptime(self.offline_start, "%H%M").time())
-        end = datetime.combine(dt.date(), datetime.strptime(self.offline_end, "%H%M").time())
-        res = start <= dt <= end
-        logging.debug("Checking if {} is between {} and {}: {}".format(
-            dt.strftime("%H:%M"), start.strftime("%H:%M"), end.strftime("%H:%M"), res))
+        if self.offline_start and self.offline_end:
+            start = datetime.combine(dt.date(), datetime.strptime(self.offline_start, "%H%M").time())
+            end = datetime.combine(dt.date(), datetime.strptime(self.offline_end, "%H%M").time())
+            res = start <= dt <= end
+            logging.debug("Checking if {} is between {} and {}: {}".format(
+                dt.strftime("%H:%M"), start.strftime("%H:%M"), end.strftime("%H:%M"), res))
+        else:
+            return False
         return res
 
     def __enter__(self):
@@ -78,6 +85,8 @@ class ModemConnection(object):
     class __ModemConnection:
         _re_signal = re.compile(r'^\+CSQ:(\d)', re.MULTILINE)
         _re_sbdix_response = re.compile(r'^\+SBDIX:\s*(\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
+        _re_creg_response = re.compile(r'^\+CREG:\s*(\d+), (\d+),?.*', re.MULTILINE)
+        _re_sbdrt_response = re.compile(r'^\+SBDRT:[\r\n](.+)', re.MULTILINE)
 
         def __init__(self):
             self._thread = None
@@ -99,11 +108,15 @@ class ModemConnection(object):
 
             self.read_attempts = int(cfg['ModemConnection']['read_attempts']) \
                 if 'read_attempts' in cfg['ModemConnection'] else 5
-            self.sbd_timeout = int(cfg['ModemConnection']['sbd_timeout']) \
-                if 'sbd_timeout' in cfg['ModemConnection'] else 10
-            # TODO: This shouldn't ever be required but the fucking modem is driving me nuts
+            self.sbd_gap = int(cfg['ModemConnection']['sbd_gap']) \
+                if 'sbd_gap' in cfg['ModemConnection'] else 1
+            # NOTE: This really isn't required but the fucking modem is driving me nuts and it just remains for control
             self.msg_timeout = float(cfg['ModemConnection']['msg_timeout']) \
-                if 'msg_timeout' in cfg['ModemConnection'] else 0.5
+                if 'msg_timeout' in cfg['ModemConnection'] else 0.1
+            self.max_reg_checks = int(cfg['ModemConnection']['max_reg_checks']) \
+                if 'max_reg_checks' in cfg['ModemConnection'] else 6
+            self.reg_check_interval = float(cfg['ModemConnection']['reg_check_interval']) \
+                if 'reg_check_interval' in cfg['ModemConnection'] else 10
 
             logging.info("Ready to connect to modem on {}".format(self.serial_port))
 
@@ -143,7 +156,36 @@ class ModemConnection(object):
                                 logging.info("Opening existing modem serial connection")
                                 self._data.open()
                             else:
-                                raise ModemConnectionException("Modem appears to already be open, wasn't previously closed!?!")
+                                raise ModemConnectionException(
+                                    "Modem appears to already be open, wasn't previously closed!?!")
+
+                        reg_checks = 0
+                        registered = False
+
+                        while reg_checks < self.max_reg_checks:
+                            logging.info("Checking registration on Iridium: attempt {} of {}".format(reg_checks, self.max_reg_checks))
+                            registration = self._send_receive_messages("AT+CREG?")
+                            check = True
+
+                            if registration.split("\n")[-1] != "OK":
+                                logging.warning("There's an issue with the registration response, won't parse: {}".
+                                                format(registration))
+                                check = False
+
+                            if check:
+                                (reg_type, reg_stat) = self._re_creg_response.search(registration).groups()
+                                if int(reg_stat) not in [1, 5]:
+                                    logging.info("Not currently registered on network: status {}".format(int(reg_stat)))
+                                else:
+                                    logging.info("Registered with status {}".format(int(reg_stat)))
+                                    registered = True
+                                    break
+                            logging.debug("Waiting for registration")
+                            tm.sleep(self.reg_check_interval)
+                            reg_checks += 1
+
+                        if not registered:
+                            raise ModemConnectionException("Failed to register on network")
 
                         i = 1
 
@@ -185,18 +227,35 @@ class ModemConnection(object):
 
                                     (mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued) = \
                                         self._re_sbdix_response.search(response).groups()
-                                    # TODO: MT Queued, schedule read!
+
+                                    # NOTE: Configured modem to not have ring alerts on SBD
+                                    if int(mt_status) == 1:
+                                        mt_message = self._send_receive_messages("AT+SBDRT")
+                                        mt_match = self._re_sbdrt_response.search(mt_message)
+                                        if mt_match:
+                                            message = mt_match.group(1)
+                                            msg_dt = datetime.now().strftime("%d%m%Y%H%M%S")
+                                            msg_filename = os.path.join(self.mt_destination, "{}_{}.msg".format(
+                                                mt_msn, msg_dt))
+                                            logging.info("Received MT message, outputting to {}".format(msg_filename))
+
+                                            try:
+                                                with open(msg_filename, "w") as fh:
+                                                    fh.write(message)
+                                            except (OSError, IOError):
+                                                logging.error("Could not write {}, abandoning...".format(message))
 
                                     response = self._send_receive_messages("AT+SBDD2")
                                     if response.split("\n")[-1] == "OK":
                                         logging.debug("Message buffers cleared")
 
                                     if int(mo_status) > 2:
-                                        raise ModemConnectionException("Failed to send message with MO Status: {}, breaking...".format(mo_status))
+                                        raise ModemConnectionException(
+                                            "Failed to send message with MO Status: {}, breaking...".format(mo_status))
 
                                     # Don't reprocess this message goddammit!
                                     msg = None
-                                    tm.sleep(self.sbd_timeout)
+                                    tm.sleep(self.sbd_gap)
                                 else:
                                     raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
                                 i += 1
@@ -217,7 +276,6 @@ class ModemConnection(object):
                         if self._data.is_open:
                             logging.debug("Closing and removing modem serial connection")
                             self._data.close()
-                            self._data = None
 
                         try:
                             self.modem_lock.release()
@@ -256,7 +314,7 @@ class ModemConnection(object):
             line = self._data.readline().decode('latin-1')
             logging.debug("Line received: '{}'".format(line.strip()))
             reply = line
-            while line.rstrip() not in ["OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER"]:
+            while line.strip() not in ["OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER"]:
                 line = self._data.readline().decode('latin-1').rstrip()
                 bytes_read += len(line)
                 logging.debug("Line received: '{}'".format(line))
@@ -494,12 +552,13 @@ class RudicsConnection(BaseTask):
             logging.info("Attempting to set system time from NTP")
             try:
                 rc = subprocess.call(shlex.split("ntpdate time.nist.gov"))
+                if rc != 0:
+                    logging.error("Non-zero return code calling ntpdate: {}".format(rc))
+                else:
+                    subprocess.call(shlex.split("date >~/ntpdate.lastlog"))
             # Broad and dirty
-            except subprocess.CalledProcessError:
+            except Exception:
                 logging.error("Issue setting time using ntpdate: {}".format(sys.exc_info()))
-
-            if rc != 0:
-                logging.error("Non-zero return code calling ntpdate: {}".format(rc))
 
     instance = None
 

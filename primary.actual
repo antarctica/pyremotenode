@@ -1,5 +1,5 @@
 [general]
-log_level=      INFO
+log_level=      DEBUG
 
 [actions]
 ;----------- CHECKS
@@ -65,7 +65,7 @@ id7=       sleep_normal
 task7=     Sleep
 day_of_week7=   tue,wed,fri,sat,sun
 hour7=      17
-minute7=    15
+minute7=    30
 args7=
     until_time= 1000
 
@@ -134,3 +134,4 @@ serial_baud= 9600
 modem_wait= 60
 offline_start= 1155
 offline_end= 1605
+;grace_period= 120

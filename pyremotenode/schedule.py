@@ -247,6 +247,10 @@ class Scheduler(object):
 
             if datetime.now() > dt:
                 logging.info("Job ID: {} does not need to be scheduled as it is prior to current time".format(action['id']))
+            elif dt > until:
+                logging.info(
+                    "Job ID: {} does not need to be scheduled as it is after the next schedule planning time".
+                    format(action['id']))
             else:
                 self._schedule.add_job(obj,
                                        id=action['id'],

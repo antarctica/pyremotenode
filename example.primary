@@ -129,8 +129,8 @@ args13=
 
 [ModemConnection]
 serial_port= /tmp/ttySP1
-serial_timeout= 20
+serial_timeout= 2
 serial_baud= 9600
-modem_wait= 60
-offline_start= 1155
-offline_end= 1605
+modem_wait= 1
+;offline_start= 1155
+;offline_end= 1605

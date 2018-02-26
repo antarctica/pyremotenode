@@ -30,9 +30,8 @@ class DummyModem(object):
 
     def start(self):
         logging.info("Starting dummy modem at {}".format(self._location))
-        self._socat = Popen([ "socat", "pty,echo=0,link={},raw".format(self._location), "-" ],
-                            stdin=PIPE, stdout=PIPE,
-                            universal_newlines=True, bufsize=1)
+        self._socat = Popen(["socat", "pty,echo=0,link={},raw,nonblock".format(self._location), "-"],
+                            stdin=PIPE, stdout=PIPE)
 
         if self._socat.poll() is not None:
             raise SocatException(self._socat.communicate(timeout=10))
@@ -42,13 +41,17 @@ class DummyModem(object):
 
     def run(self):
         stdin = self._socat.stdin
-        sbd_count = 1
+        sbd_mo_count = 1
+        sbd_mt_count = 1
+        sbd_mt_msg = "UPDATE: http://circadiansystems.co.uk/test.cfg"
 
         with self._socat:
+            registration_checks = 0
+
             for stdout in self._socat.stdout:
                 response = None
-                reply_lines = ["OK"]
-                command = stdout.strip()
+                reply_lines = ["", "OK"]
+                command = stdout.decode().strip()
 
                 logging.debug("Received: {}".format(command))
 
@@ -58,7 +61,16 @@ class DummyModem(object):
                 #    if response != "END":
                 #        reply_lines.append(response)
 
-                if command.startswith("AT+CSQ"):
+                if command.startswith("AT+CREG?"):
+                    registered = 4
+                    if registration_checks == 2:
+                        logging.debug("Registered")
+                        registered = 1
+
+                    time.sleep(1)
+                    reply_lines = ["+CREG:000,00{}".format(registered), "", "OK"]
+                    registration_checks += 1
+                elif command.startswith("AT+CSQ"):
                     logging.debug("Signal request")
                     time.sleep(1)
                     reply_lines = ["+CSQ:5", "", "OK"]
@@ -67,15 +79,19 @@ class DummyModem(object):
                 elif command.startswith("AT+SBDIX"):
                     logging.debug("Sending message with slight delay")
                     time.sleep(1)
-                    sbd_count += 1
-                    reply_lines = ["+SBDIX:0, {}, 0, 0, 0, 0".format(sbd_count), "", "OK"]
-                elif command.startswith("AT+SBDD0"):
-                    logging.debug("Cleared buffer")
+                    sbd_mo_count += 1
+                    reply_lines = ["+SBDIX:0, {}, 1, {}, {}, 0".format(sbd_mo_count, sbd_mt_count, len(sbd_mt_msg)), "", "OK"]
+                elif command.startswith("AT+SBDRT"):
+                    logging.debug("Giving MT message")
+                    sbd_mt_count += 1
+                    reply_lines = ["+SBDRT:", sbd_mt_msg, "", "OK"]
+                elif command.startswith("AT+SBDD2"):
+                    logging.debug("Cleared buffers")
 
                 if len(reply_lines):
-                    response = "\n".join(reply_lines)
-                    logging.debug("Sending {}".format(response))
-                    stdin.write(response+"\n")
+                    response = "\r\n".join(reply_lines)
+                    logging.debug("Sending {}".format(response.replace("\r", "\n")))
+                    stdin.write((response+"\r\n").encode('latin-1'))
                     stdin.flush()
                 else:
                     logging.info("You've input an invalid response")
