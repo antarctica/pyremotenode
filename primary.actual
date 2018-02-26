@@ -127,6 +127,16 @@ minute13=    55
 args13=
     until_time= 1000
 
+;------------ WAKEUP
+id14=       wakeup_script
+task14=     Command
+onboot14=   1
+args14=
+    path=   /home/pyremotenode/bin/wakeup_script --gps /dev/ttyUSB0 --max-gap 120 --ntp-age 10
+ok14=       SBDSender
+warn14=     SBDSender
+crit14=     SBDSender
+
 [ModemConnection]
 serial_port= /dev/ttySP1
 serial_timeout= 20

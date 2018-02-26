@@ -1,0 +1,16 @@
+[general]
+log_level=      DEBUG
+
+[actions]
+;----------- CHECKS
+
+id1=        check_supply_voltage_boot
+task1=      Command
+onboot1=    1
+args1=
+    path=       /home/pyremotenode/bin/check_supply_voltage -i -w 12.0 -c 10.5 -t ts7400
+ok1=            SBDSender
+warn1=          SBDSender
+crit1=          Sleep
+crit_args1=
+    until_time= 1000

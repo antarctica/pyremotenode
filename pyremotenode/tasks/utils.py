@@ -35,7 +35,7 @@ class Command(BaseTask):
             # TODO: Evaluate how this will be handled in the end
             raise TaskException("The called command failed with an out of bound return code...")
 
-        logging.debug("Check return output: {0}".format(ret))
+        logging.info("Check return output: {0}".format(ret))
         self.state = ret.strip()
         return self.process_check_output(ret)
 
