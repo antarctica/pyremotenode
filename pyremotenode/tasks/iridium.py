@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading as t
 import time as tm
+import traceback
 
 from datetime import datetime
 
@@ -85,7 +86,7 @@ class ModemConnection(object):
     class __ModemConnection:
         _re_signal = re.compile(r'^\+CSQ:(\d)', re.MULTILINE)
         _re_sbdix_response = re.compile(r'^\+SBDIX:\s*(\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
-        _re_creg_response = re.compile(r'^\+CREG:\s*(\d+), (\d+),?.*', re.MULTILINE)
+        _re_creg_response = re.compile(r'^\+CREG:\s*(\d+),\s*(\d+),?.*', re.MULTILINE)
         _re_sbdrt_response = re.compile(r'^\+SBDRT:[\r\n](.+)', re.MULTILINE)
 
         def __init__(self):
@@ -263,7 +264,7 @@ class ModemConnection(object):
                             logging.warning("Not enough signal to perform activities")
                     except ModemConnectionException:
                         logging.error("Out of logic modem operations, breaking to restart...")
-                        logging.error(sys.exc_info())
+                        logging.error(traceback.format_exc())
                     except queue.Empty:
                         logging.info("{} messages processed, {} left in queue".format(i, self.message_queue.qsize()))
                     except Exception:
