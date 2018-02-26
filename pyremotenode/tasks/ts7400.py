@@ -56,10 +56,10 @@ class Sleep(BaseTask):
         if dt_reboot and dt_reboot_set:
             reboot_diff = int((dt_reboot - dt_reboot_set).total_seconds())
 
-        logging.debug("Difference between {} and {}: {} seconds".format(
-            dt_reboot.strftime("%H:%M:%S"),
-            dt_reboot_set.strftime("%H:%M:%S"),
-            reboot_diff))
+            logging.debug("Difference between {} and {}: {} seconds".format(
+                dt_reboot.strftime("%H:%M:%S"),
+                dt_reboot_set.strftime("%H:%M:%S"),
+                reboot_diff))
 
         TS7400Utils.rtc_clock()
         logging.info("Sleeping for {} seconds".format(seconds))

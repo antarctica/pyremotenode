@@ -65,7 +65,7 @@ id7=       sleep_normal
 task7=     Sleep
 day_of_week7=   tue,wed,fri,sat,sun
 hour7=      17
-minute7=    30
+minute7=    15
 args7=
     until_time= 1000
 
@@ -106,7 +106,7 @@ id11=        ssh_stop
 task11=      SshTunnel
 day_of_week11=   mon,thu
 hour11=      17
-minute11=    45
+minute11=    40
 args11=
     action=     stop
 
@@ -114,7 +114,7 @@ id12=        rudics_stop
 task12=      RudicsConnection
 day_of_week12=   mon,thu
 hour12=      17
-minute12=    50
+minute12=    42
 args12=
     action=     stop
 
@@ -123,7 +123,7 @@ id13=       sleep_rudics
 task13=     Sleep
 day_of_week13=   mon,thu
 hour13=      17
-minute13=    55
+minute13=    45
 args13=
     until_time= 1000
 

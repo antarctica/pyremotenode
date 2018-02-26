@@ -87,7 +87,7 @@ class ModemConnection(object):
         _re_signal = re.compile(r'^\+CSQ:(\d)', re.MULTILINE)
         _re_sbdix_response = re.compile(r'^\+SBDIX:\s*(\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
         _re_creg_response = re.compile(r'^\+CREG:\s*(\d+),\s*(\d+),?.*', re.MULTILINE)
-        _re_sbdrt_response = re.compile(r'^\+SBDRT:[\r\n](.+)', re.MULTILINE)
+        _re_sbdrt_response = re.compile(r'^\+SBDRT:', re.MULTILINE)
 
         def __init__(self):
             self._thread = None
@@ -118,6 +118,11 @@ class ModemConnection(object):
                 if 'max_reg_checks' in cfg['ModemConnection'] else 6
             self.reg_check_interval = float(cfg['ModemConnection']['reg_check_interval']) \
                 if 'reg_check_interval' in cfg['ModemConnection'] else 10
+            self.mt_destination = cfg['ModemConnection']['mt_destination'] \
+                if 'mt_destination' in cfg['ModemConnection'] else os.path.join("data", "pyremotenode", "messages")
+
+            if not os.path.exists(self.mt_destination):
+                logging.info("Creating non-existent message destination: {}".format(self.mt_destination))
 
             logging.info("Ready to connect to modem on {}".format(self.serial_port))
 
@@ -150,7 +155,7 @@ class ModemConnection(object):
                                 stopbits=serial.STOPBITS_ONE
                             )
                             self._send_receive_messages("AT")
-                            self._send_receive_messages("ATE0\r")
+                            self._send_receive_messages("ATE0\r\n")
                             self._send_receive_messages("AT+SBDC")
                         else:
                             if not self._data.is_open:
@@ -234,7 +239,7 @@ class ModemConnection(object):
                                         mt_message = self._send_receive_messages("AT+SBDRT")
                                         mt_match = self._re_sbdrt_response.search(mt_message)
                                         if mt_match:
-                                            message = mt_match.group(1)
+                                            message = mt_message[mt_match.end():]
                                             msg_dt = datetime.now().strftime("%d%m%Y%H%M%S")
                                             msg_filename = os.path.join(self.mt_destination, "{}_{}.msg".format(
                                                 mt_msn, msg_dt))

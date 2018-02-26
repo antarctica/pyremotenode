@@ -2,5 +2,33 @@
 log_level=      DEBUG
 
 [actions]
-;----------- CHECKS
+;----------- DATALOG
 
+id1=        log_local_adc
+task1=      Command
+onboot1=    1
+interval1=  2
+args1=
+    path=       /home/pyremotenode/bin/logLocalADC
+
+id2=        log_pmu_data
+task2=      Command
+onboot2=    1
+interval2=  2
+args2=
+    path=       /home/pyremotenode/bin/logPMUData
+
+;------------ SLEEPS
+
+id3=        log_pmu_data
+task3=      Command
+
+;------------ WAKEUP
+
+id4=        wakeup_script
+task4=      Command
+onboot4=    1
+args4=
+    path=   /home/pyremotenode/bin/wakeup_script --gps /dev/ttyUSB0 --max-gap 120
+
+;------------
