@@ -64,7 +64,7 @@ class Sleep(BaseTask):
         TS7400Utils.rtc_clock()
         logging.info("Sleeping for {} seconds".format(seconds))
         iso_dt = datetime.combine(dt, tm)
-        iso_dt.microsecond = 0
+        iso_dt.replace(microsecond=0)
         cmd = "gotosleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
 
         logging.debug("Running Sleep command: {}".format(cmd))
