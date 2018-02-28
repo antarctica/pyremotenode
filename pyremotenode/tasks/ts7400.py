@@ -56,7 +56,7 @@ class Sleep(BaseTask):
         if dt_reboot and dt_reboot_set:
             reboot_diff = int((dt_reboot - dt_reboot_set).total_seconds())
 
-            logging.debug("Difference between {} and {}: {} seconds".format(
+            logging.info("Difference between {} and {}: {} seconds".format(
                 dt_reboot.strftime("%H:%M:%S"),
                 dt_reboot_set.strftime("%H:%M:%S"),
                 reboot_diff))
@@ -67,7 +67,7 @@ class Sleep(BaseTask):
         iso_dt.replace(microsecond=0)
         cmd = "/home/pyremotenode/bin/goto_sleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
 
-        logging.debug("Running Sleep command: {}".format(cmd))
+        logging.info("Running Sleep command: {}".format(cmd))
         rc = sp.call(shlex.split(cmd))
 
         if rc != 0:
