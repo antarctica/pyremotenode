@@ -45,7 +45,7 @@ warn4=      SBDSender
 
 id5=        check_free_storage_root
 task5=      Command
-interval5=  30
+time5=      1145
 args5=
     path=       /home/pyremotenode/bin/check_free_storage -t ts7400 -w 20 -c 10 -i /
 warn5=      SBDSender
@@ -53,7 +53,7 @@ crit5=      SBDSender
 
 id6=       check_free_storage_data
 task6=     Command
-interval6= 30
+time6=     1145
 args6=
     path=       /home/pyremotenode/bin/check_free_storage -t ts7400 -w 20 -c 10 -i /data
 warn6=      SBDSender
@@ -122,8 +122,8 @@ args12=
 id13=       sleep_rudics
 task13=     Sleep
 day_of_week13=   mon,thu
-hour13=      17
-minute13=    45
+hour13=      20
+minute13=    32
 args13=
     until_time= 1000
 
@@ -132,7 +132,7 @@ id14=       wakeup_script
 task14=     Command
 onboot14=   1
 args14=
-    path=   /home/pyremotenode/bin/wakeup_script --gps /dev/ttyUSB0 --max-gap 120 --ntp-age 10
+    path=   /home/pyremotenode/bin/wakeup_script /dev/ttyUSB0 120 10
 ok14=       SBDSender
 warn14=     SBDSender
 crit14=     SBDSender

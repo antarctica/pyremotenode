@@ -100,7 +100,8 @@ class ModemConnection(object):
 
             self._data = None
 
-            self._modem_lock = ModemLock()       # Lock message buffer
+            self._modem_lock = ModemLock()      # Lock message buffer and physical modem
+            self._thread_lock = t.RLock()       # Lock thread creation
             self._modem_wait = float(self.modem_wait)
             self._message_queue = queue.Queue()
             # TODO: This should be synchronized, but we won't really run into those issues with it as we never switch
@@ -129,12 +130,13 @@ class ModemConnection(object):
 
         def start(self):
             # TODO: Draft implementation of the threading for message sending...
-            if not self._thread:
-                logging.info("Starting modem thread")
-                self._thread = t.Thread(name=self.__class__.__name__, target=self.run)
-                self._thread.setDaemon(True)
-                self._running = True
-                self._thread.start()
+            with self._thread_lock:
+                if not self._thread:
+                    logging.info("Starting modem thread")
+                    self._thread = t.Thread(name=self.__class__.__name__, target=self.run)
+                    self._thread.setDaemon(True)
+                    self._running = True
+                    self._thread.start()
 
         def run(self):
             while self._running:
