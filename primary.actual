@@ -99,7 +99,7 @@ args10=
     address=    192.171.138.14
 ; Numbered 33000 + idx
     port=       22,873
-    user=       circadian
+    user=       jambyr
     ppp0_route= true
 
 id11=        ssh_stop
@@ -122,8 +122,8 @@ args12=
 id13=       sleep_rudics
 task13=     Sleep
 day_of_week13=   mon,thu
-hour13=      20
-minute13=    32
+hour13=      17
+minute13=    55
 args13=
     until_time= 1000
 

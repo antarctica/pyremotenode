@@ -147,7 +147,7 @@ class Scheduler(object):
         if not action[task_type]:
             return None
 
-        kwargs = action["{}_args".format(type)] if "{}_args".format(type) in action else {}
+        kwargs = action["{}_args".format(task_type)] if "{}_args".format(task_type) in action else {}
         kwargs['invoking_task'] = self._schedule_task_instances[id]
 
         id = "{}_{}".format(action['id'], datetime.now().strftime("%H%m%s"))

@@ -6,6 +6,7 @@ import subprocess as sp
 
 from datetime import datetime, timedelta, time
 from pyremotenode.tasks import BaseTask
+from pyremotenode.utils import setup_logging
 
 from pyremotenode.tasks.iridium import SBDSender
 
@@ -54,7 +55,7 @@ class Sleep(BaseTask):
 
         reboot_diff = 0
         if dt_reboot and dt_reboot_set:
-            reboot_diff = int((dt_reboot - dt_reboot_set).total_seconds())
+            reboot_diff = int((dt_reboot_set - dt_reboot).total_seconds())
 
             logging.info("Difference between {} and {}: {} seconds".format(
                 dt_reboot.strftime("%H:%M:%S"),
@@ -62,17 +63,21 @@ class Sleep(BaseTask):
                 reboot_diff))
 
         TS7400Utils.rtc_clock()
-        logging.info("Sleeping for {} seconds".format(seconds))
-        iso_dt = datetime.combine(dt, tm)
+        logging.info("Sleeping until {}, for {} seconds".format(
+            datetime.combine(dt, tm).strftime("%d/%m/%Y %H:%M:%S"), seconds))
+        iso_dt = datetime.now()
         iso_dt.replace(microsecond=0)
         cmd = "/home/pyremotenode/bin/goto_sleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
 
         logging.info("Running Sleep command: {}".format(cmd))
+        for h in logging.getLogger().handlers:
+            h.flush()
         rc = sp.call(shlex.split(cmd))
 
         if rc != 0:
             # TODO: Handle this, should be extremely unlikely...
             self.state = BaseTask.CRITICAL
+
             logging.error("Did not manage to go to sleep, something's very wrong...")
 
         self.state = BaseTask.OK
