@@ -4,13 +4,13 @@ log_level=      DEBUG
 [actions]
 ;----------- CHECKS
 
-id1=       sleep_rudics
+id1=       sleep_normal
 task1=     Sleep
-day_of_week1=   mon,thu
+day_of_week1=   tue,wed,fri,sat,sun
 onboot1=    1
 args1=
     until_time= 1000
-
+    
 [ModemConnection]
 serial_port= /tmp/ttySP1
 serial_timeout= 2

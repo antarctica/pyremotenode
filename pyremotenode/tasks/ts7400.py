@@ -66,7 +66,7 @@ class Sleep(BaseTask):
         logging.info("Sleeping until {}, for {} seconds".format(
             datetime.combine(dt, tm).strftime("%d/%m/%Y %H:%M:%S"), seconds))
         iso_dt = datetime.now()
-        iso_dt.replace(microsecond=0)
+        iso_dt = iso_dt.replace(microsecond=0)
         cmd = "/home/pyremotenode/bin/goto_sleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
 
         logging.info("Running Sleep command: {}".format(cmd))
@@ -100,6 +100,7 @@ class Sleep(BaseTask):
     def _get_reboot_set_time(self):
         path = os.path.expandvars(os.path.join("$HOME", "sleepinfo.txt"))
 
+        # TODO: This only works with sleeping less than a day
         if os.path.exists(path) and \
                         (datetime.now() - datetime.fromtimestamp(os.stat(path).st_mtime)).total_seconds() < 2 * 86400:
             with open(path, "r") as fh:

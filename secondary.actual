@@ -90,3 +90,4 @@ serial_baud= 9600
 modem_wait= 60
 offline_start= 1030
 offline_end= 2200
+grace_period= 30
