@@ -6,7 +6,7 @@ log_level=      DEBUG
 
 id1=       sleep_normal
 task1=     Sleep
-day_of_week1=   tue,wed,fri,sat,sun
+day_of_week1=   mon,tue,wed,fri,sat,sun
 onboot1=    1
 args1=
     until_time= 1000

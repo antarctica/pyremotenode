@@ -63,7 +63,7 @@ crit6=      SBDSender
 
 id7=       sleep_normal
 task7=     Sleep
-day_of_week7=   tue,wed,fri,sat,sun
+day_of_week7=   mon,tue,wed,fri,sat,sun
 hour7=      17
 minute7=    20
 args7=
@@ -83,7 +83,7 @@ args8=
 
 id9=        rudics_open
 task9=      RudicsConnection
-day_of_week9=   mon,thu
+day_of_week9=   thu
 hour9=      17
 minute9=    15
 args9=
@@ -92,9 +92,9 @@ args9=
 
 id10=        ssh_start
 task10=      SshTunnel
-day_of_week10=   mon,thu
+day_of_week10=   thu
 hour10=      17
-minute10=    18
+minute10=    17
 args10=
     action=     start
     address=    192.171.138.14
@@ -105,7 +105,7 @@ args10=
 
 id11=        ssh_stop
 task11=      SshTunnel
-day_of_week11=   mon,thu
+day_of_week11=   thu
 hour11=      17
 minute11=    40
 args11=
@@ -113,7 +113,7 @@ args11=
 
 id12=        rudics_stop
 task12=      RudicsConnection
-day_of_week12=   mon,thu
+day_of_week12=   thu
 hour12=      17
 minute12=    42
 args12=
@@ -122,9 +122,9 @@ args12=
 ;------------ RUDICS SLEEP
 id13=       sleep_rudics
 task13=     Sleep
-day_of_week13=   mon,thu
+day_of_week13=   thu
 hour13=      17
-minute13=    55
+minute13=    45
 args13=
     until_time= 1000
 
