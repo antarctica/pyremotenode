@@ -1,3 +1,4 @@
+import binascii
 import logging
 import os
 import queue
@@ -5,17 +6,22 @@ import re
 import serial
 import shlex
 import signal
+import struct
 import subprocess
 import sys
 import threading as t
 import time as tm
 import traceback
+import xmodem
 
 from datetime import datetime
 
 from pyremotenode.tasks import BaseTask
 from pyremotenode.utils.config import Configuration
 
+# TODO: Major refactor as the serial comms have undermined the original layout for this module
+# TODO: We need to implement a shared key security system on the web-exposed service
+# TODO: This is intrisincally tied to the TS7400 
 
 class ModemLock(object):
     # TODO: Pass the configuration options for modem port (this is very LRAD specific)
@@ -89,6 +95,10 @@ class ModemConnection(object):
         _re_creg_response = re.compile(r'^\+CREG:\s*(\d+),\s*(\d+),?.*', re.MULTILINE)
         _re_sbdrt_response = re.compile(r'^\+SBDRT:', re.MULTILINE)
 
+        _priority_sbd_mo = 1
+        _priority_file_mo = 2
+        _priority_sbd_mt = 3
+
         def __init__(self):
             self._thread = None
 
@@ -99,11 +109,12 @@ class ModemConnection(object):
             self.modem_wait = cfg['ModemConnection']['modem_wait']
 
             self._data = None
+            self._dataxfer_errors = 0
 
             self._modem_lock = ModemLock()      # Lock message buffer and physical modem
             self._thread_lock = t.RLock()       # Lock thread creation
             self._modem_wait = float(self.modem_wait)
-            self._message_queue = queue.Queue()
+            self._message_queue = queue.PriorityQueue()
             # TODO: This should be synchronized, but we won't really run into those issues with it as we never switch
             # the modem off whilst it's running
             self._running = False
@@ -121,6 +132,13 @@ class ModemConnection(object):
                 if 'reg_check_interval' in cfg['ModemConnection'] else 10
             self.mt_destination = cfg['ModemConnection']['mt_destination'] \
                 if 'mt_destination' in cfg['ModemConnection'] else os.path.join(os.sep, "data", "pyremotenode", "messages")
+            # Defeats https://github.com/pyserial/pyserial/issues/59 with socat usage
+            self.virtual = bool(cfg['ModemConnection']['virtual']) \
+                if 'virtual' in cfg['ModemConnection'] else False
+            # MO dial up vars
+            self.dialup_number = cfg['ModemConnection']['dialup_number'] \
+                if 'dialup_number' in cfg['ModemConnection'] else None
+            self._lineend = "\r" if not self.virtual else "\n"
 
             if not os.path.exists(self.mt_destination):
                 logging.info("Creating non-existent message destination: {}".format(self.mt_destination))
@@ -129,7 +147,8 @@ class ModemConnection(object):
             logging.info("Ready to connect to modem on {}".format(self.serial_port))
 
         def start(self):
-            # TODO: Draft implementation of the threading for message sending...
+            # TODO: Need to draft implementation of the threading for message sending...
+            # Actually, don't need to do that as the queue
             with self._thread_lock:
                 if not self._thread:
                     logging.info("Starting modem thread")
@@ -140,160 +159,289 @@ class ModemConnection(object):
 
         def run(self):
             while self._running:
-                msg = None
+                modem_locked = False
 
-                if not self.message_queue.empty() and self.modem_lock.acquire(blocking=False):
-                    # TODO: This try-except is getting massive, would be nice to dissolve it at some point
-                    try:
-                        if not self._data:
-                            logging.info("Creating pyserial comms instance to modem")
-                            # Instantiation = opening of port hence why this is here and not in the constructor
-                            self._data = serial.Serial(
-                                port=self.serial_port,
-                                timeout=float(self.serial_timeout),
-                                write_timeout=float(self.serial_timeout),
-                                baudrate=self.serial_baud,
-                                bytesize=serial.EIGHTBITS,
-                                parity=serial.PARITY_NONE,
-                                stopbits=serial.STOPBITS_ONE
-                            )
-                            self._send_receive_messages("AT")
-                            self._send_receive_messages("ATE0\r\n")
-                            self._send_receive_messages("AT+SBDC")
-                        else:
-                            if not self._data.is_open:
-                                logging.info("Opening existing modem serial connection")
-                                self._data.open()
+                try:
+                    if not self.message_queue.empty() \
+                            and self.modem_lock.acquire(blocking=False):
+                        modem_locked = True
+
+                        self._initialise_modem()
+
+                        if not self.message_queue.empty():
+                            logging.debug("Current queue size approx.: {}".format(str(self.message_queue.qsize())))
+
+                            if self._signal_check():
+                                num = self._process_outstanding_messages()
+                                logging.info("Processed {} outgoing messages".format(num))
                             else:
-                                raise ModemConnectionException(
-                                    "Modem appears to already be open, wasn't previously closed!?!")
+                                logging.warning("Not enough signal to perform activities")
+                except ModemConnectionException:
+                    logging.error("Out of logic modem operations, breaking to restart...")
+                    logging.error(traceback.format_exc())
+                except queue.Empty:
+                    logging.info("{} messages processed, {} left in queue".format(i, self.message_queue.qsize()))
+                except Exception:
+                    logging.error("Modem inoperational or another error occurred")
+                    logging.error(traceback.format_exc())
+                finally:
+                    logging.info("Reached end of modem usage for this iteration...")
 
-                        reg_checks = 0
-                        registered = False
+                    if self._data and self._data.is_open:
+                        logging.debug("Closing and removing modem serial connection")
+                        self._data.close()
 
-                        while reg_checks < self.max_reg_checks:
-                            logging.info("Checking registration on Iridium: attempt {} of {}".format(reg_checks, self.max_reg_checks))
-                            registration = self._send_receive_messages("AT+CREG?")
-                            check = True
-
-                            if registration.split("\n")[-1] != "OK":
-                                logging.warning("There's an issue with the registration response, won't parse: {}".
-                                                format(registration))
-                                check = False
-
-                            if check:
-                                (reg_type, reg_stat) = self._re_creg_response.search(registration).groups()
-                                if int(reg_stat) not in [1, 5]:
-                                    logging.info("Not currently registered on network: status {}".format(int(reg_stat)))
-                                else:
-                                    logging.info("Registered with status {}".format(int(reg_stat)))
-                                    registered = True
-                                    break
-                            logging.debug("Waiting for registration")
-                            tm.sleep(self.reg_check_interval)
-                            reg_checks += 1
-
-                        if not registered:
-                            raise ModemConnectionException("Failed to register on network")
-
-                        i = 1
-
-                        # Check we have a good enough signal to work with (>3)
-                        signal_test = self._send_receive_messages("AT+CSQ")
-                        if signal_test == "":
-                            raise ModemConnectionException(
-                                "No response received for signal quality check")
-                        signal_level = self._re_signal.search(signal_test)
-
-                        if signal_level:
-                            try:
-                                signal_level = int(signal_level.group(1))
-                                logging.debug("Got signal level {}".format(signal_level))
-                            except ValueError:
-                                raise ModemConnectionException(
-                                    "Could not interpret signal from response: {}".format(signal_test))
-                        else:
-                            raise ModemConnectionException(
-                                "Could not interpret signal from response: {}".format(signal_test))
-
-                        logging.debug("Current queue size approx.: {}".format(str(self.message_queue.qsize())))
-
-                        if type(signal_level) == int and signal_level >= 3:
-                            while not self.message_queue.empty():
-                                logging.debug("Still have messages, getting another...")
-                                msg = self.message_queue.get(timeout=1)
-
-                                if msg[0] == "sbd":
-                                    text = msg[1].get_message_text().replace("\n", " ")
-
-                                    response = self._send_receive_messages("AT+SBDWT={}".format(text))
-                                    if response.split("\n")[-1] != "OK":
-                                        raise ModemConnectionException("Error submitting message: {}".format(response))
-
-                                    response = self._send_receive_messages("AT+SBDIX")
-                                    if response.split("\n")[-1] != "OK":
-                                        raise ModemConnectionException("Error submitting message: {}".format(response))
-
-                                    (mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued) = \
-                                        self._re_sbdix_response.search(response).groups()
-
-                                    # NOTE: Configured modem to not have ring alerts on SBD
-                                    if int(mt_status) == 1:
-                                        mt_message = self._send_receive_messages("AT+SBDRT")
-                                        mt_match = self._re_sbdrt_response.search(mt_message)
-                                        if mt_match:
-                                            message = mt_message[mt_match.end():]
-                                            msg_dt = datetime.now().strftime("%d%m%Y%H%M%S")
-                                            msg_filename = os.path.join(self.mt_destination, "{}_{}.msg".format(
-                                                mt_msn, msg_dt))
-                                            logging.info("Received MT message, outputting to {}".format(msg_filename))
-
-                                            try:
-                                                with open(msg_filename, "w") as fh:
-                                                    fh.write(message)
-                                            except (OSError, IOError):
-                                                logging.error("Could not write {}, abandoning...".format(message))
-
-                                    response = self._send_receive_messages("AT+SBDD2")
-                                    if response.split("\n")[-1] == "OK":
-                                        logging.debug("Message buffers cleared")
-
-                                    if int(mo_status) > 2:
-                                        raise ModemConnectionException(
-                                            "Failed to send message with MO Status: {}, breaking...".format(mo_status))
-
-                                    # Don't reprocess this message goddammit!
-                                    msg = None
-                                    tm.sleep(self.sbd_gap)
-                                else:
-                                    raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
-                                i += 1
-                        else:
-                            logging.warning("Not enough signal to perform activities")
-                    except ModemConnectionException:
-                        logging.error("Out of logic modem operations, breaking to restart...")
-                        logging.error(traceback.format_exc())
-                    except queue.Empty:
-                        logging.info("{} messages processed, {} left in queue".format(i, self.message_queue.qsize()))
-                    except Exception:
-                        logging.error("Modem inoperational or another error occurred")
-                        logging.error(sys.exc_info())
-                    finally:
-                        logging.info("Reached end of modem usage for this iteration...")
-                        if msg:
-                            self._message_queue.put(msg, timeout=5)
-                        if self._data.is_open:
-                            logging.debug("Closing and removing modem serial connection")
-                            self._data.close()
-
-                        try:
+                    try:
+                        if modem_locked:
                             self.modem_lock.release()
-                        except RuntimeError:
-                            logging.warning("Looks like the lock wasn't acquired, dealing with this...")
+                    except RuntimeError:
+                        logging.warning("Looks like the lock wasn't acquired, dealing with this...")
+
                 logging.debug("{} thread waiting...".format(self.__class__.__name__))
                 tm.sleep(self._modem_wait)
 
-        def _send_receive_messages(self, message):
+        def _initialise_modem(self):
+            """
+            _initialise_modem
+
+            Opens the serial interface to the modem and performs the necessary registration
+            checks for activity on the network. Raises an exception if we can't gather a
+            suitable connection
+
+            :return: None
+            """
+            if not self._data:
+                logging.info("Creating pyserial comms instance to modem")
+                # Instantiation = opening of port hence why this is here and not in the constructor
+                self._data = serial.Serial(
+                    port=self.serial_port,
+                    timeout=float(self.serial_timeout),
+                    write_timeout=float(self.serial_timeout),
+                    baudrate=self.serial_baud,
+                    bytesize=serial.EIGHTBITS,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_ONE,
+                    # TODO: Extend to allow config file for HW flow control
+                    rtscts=self.virtual,
+                    dsrdtr=self.virtual
+                )
+                self._send_receive_messages("AT")
+                self._send_receive_messages("ATE0\n")
+                self._send_receive_messages("AT+SBDC")
+            else:
+                if not self._data.is_open:
+                    logging.info("Opening existing modem serial connection")
+                    self._data.open()
+                else:
+                    raise ModemConnectionException(
+                        "Modem appears to already be open, wasn't previously closed!?!")
+
+            reg_checks = 0
+            registered = False
+
+            while reg_checks < self.max_reg_checks:
+                logging.info("Checking registration on Iridium: attempt {} of {}".format(reg_checks, self.max_reg_checks))
+                registration = self._send_receive_messages("AT+CREG?")
+                check = True
+
+                if registration.split(self._lineend)[-1] != "OK":
+                    logging.warning("There's an issue with the registration response, won't parse: {}".
+                                    format(registration))
+                    check = False
+
+                if check:
+                    (reg_type, reg_stat) = self._re_creg_response.search(registration).groups()
+                    if int(reg_stat) not in [1, 5]:
+                        logging.info("Not currently registered on network: status {}".format(int(reg_stat)))
+                    else:
+                        logging.info("Registered with status {}".format(int(reg_stat)))
+                        registered = True
+                        break
+                logging.debug("Waiting for registration")
+                tm.sleep(self.reg_check_interval)
+                reg_checks += 1
+
+            if not registered:
+                raise ModemConnectionException("Failed to register on network")
+
+        def _process_outstanding_messages(self):
+            """
+            Process the remains of the queue in the order SBD MO, file transfers
+
+            We undertake the SBD first, as they're quicker and usually going to be used for key data. The SBD method
+            will also check the MT SBD queue with Iridium which will pull down last, so we know all data is out before
+            somebody messes with the configuration remotely
+
+            :return: Number of messages processed
+            """
+
+            logging.debug("Processing currently queued messages...")
+            while not self.message_queue.empty():
+                msg = self.message_queue.get(timeout=1)
+                try:
+                    if msg[0] == self._priority_sbd_mo:
+                        self._process_sbd_message(msg[1])
+                        # Don't reprocess this message goddammit!
+                        tm.sleep(self.sbd_gap)
+                    elif msg[0] == self._priority_file_mo:
+                        # TODO: We need to batch file transfers together onto a single
+                        # long running call
+                        self._process_file_message(msg[1])
+                    else:
+                        raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
+                except ModemConnectionException:
+                    # TODO: We need to put this back at the start of the queue, not the end...
+                    logging.warning("Failed message handling, putting back to the queue...")
+                    self.message_queue.put(msg)
+                    raise
+
+        def _process_file_message(self, filename):
+            """ Take a file and process it across the link via XMODEM
+
+            TODO: This and all modem integration should be extrapolated to it's own library """
+            
+            def _callback(total_packets, success_count, error_count):
+                logging.debug("{} packets, {} success, {} errors".format(total_packets, success_count, error_count))
+                logging.debug("CD STATE: {}".format(self._data.cd))
+                if error_count > self._dataxfer_errors:
+                    logging.warning("Increase in error count")
+                    self._dataxfer_errors = error_count
+#                # TODO: NAKs and error recall thresholds need to be configurable
+#                if error_count > 0 and error_count % 3 == 0:
+#                    logging.info("Third error response, re-establishing uplink")
+                    try:
+                        self._end_data_call()
+                    except ModemConnectionException as e:
+                        logging.warning("Unable to cleanly kill the call, will attempt a startup anyway: {}".format(e))
+                    finally:
+                        # If this doesn't work, we're likely fucked and might as well have the whole process restart
+                        # again
+                        self._start_data_call()
+
+            def _getc(size, timeout=self._data.timeout):
+#                logging.debug("READ SIZE: {}".format(size))
+                self._data.timeout = timeout
+                read = self._data.read(size=size) or None
+                logging.debug("READ DATA: {}".format(read))
+                return read
+
+            def _putc(data, timeout=self._data.write_timeout):
+#                logging.debug("WRITE DATA: {}".format(data))
+                self._data.write_timeout = timeout
+                size = self._data.write(data=data)
+#                logging.debug("WRITE SIZE: {}".format(size))
+                return size
+
+            # TODO: Catch errors and hangup the call!
+            # TODO: Call thread needs to be separate to maintain uplink
+            if self._start_data_call():
+                # NOTE: Dirty hack to send filename for this transfer through
+                self._send_filename(filename)
+
+                xfer = xmodem.XMODEM(_getc, _putc)
+
+                stream = open(filename, 'rb')
+                xfer.send(stream, callback=_callback)
+                logging.debug("Finished transfer")
+                self._end_data_call()
+            self._dataxfer_errors
+
+        def _send_filename(self, filename):
+            buffer = bytearray()
+
+            res = self._send_receive_messages("FILENAME")
+            # TODO: abstract the responses from being always a split and subscript
+            if res.split(self._lineend)[-1] != "GOFORIT":
+                raise ModemConnectionException("Required response for FILENAME command not received")
+
+            # We can only have two byte lengths, and we don't escape the two markers characters
+            # since we're using the length marker with otherwise fixed fields. We just use 0x1b
+            # as validation of the last byte of the message
+            bfile = os.path.basename(filename).encode("latin-1")[:255]
+            length = len(bfile)
+            buffer += struct.pack("BB", 0x1a, length)
+            buffer += struct.pack("{}s".format(length), bfile)
+            buffer += struct.pack("qB", binascii.crc32(bfile) & 0xffffffff, 0x1b)
+
+            res = self._send_receive_messages(buffer, raw=True)
+            if res.split(self._lineend)[-1] != "NAMERECV":
+                raise ModemConnectionException("Could not transfer filename first: {}".format(res))
+
+        def _start_data_call(self):
+            if not self.dialup_number:
+                logging.warning("No dialup number configured, will drop this message")
+                return False
+
+            response = self._send_receive_messages("ATDT{}".format(self.dialup_number))
+            if not response.split(self._lineend)[-1].startswith("CONNECT "):
+                raise ModemConnectionException("Error opening call: {}".format(response))
+            return True
+
+        # TODO: Too much sleeping, use state based logic
+        def _end_data_call(self):
+            logging.debug("Two second sleep")
+            tm.sleep(2)
+            logging.debug("Two second sleep complete")
+            response = self._send_receive_messages("+++".encode(), raw=True)
+            logging.debug("One second sleep")
+            tm.sleep(1)
+            logging.debug("One second sleep complete")
+
+            if response.split(self._lineend)[-1] != "OK":
+                raise ModemConnectionException("Did not switch to command mode to end call")
+
+            response = self._send_receive_messages("ATH0")
+
+            if response.split(self._lineend)[-1] != "OK":
+                raise ModemConnectionException("Did not hang up the call")
+            else:
+                logging.debug("Sleeping another second to wait for the line")
+                tm.sleep(1)
+
+        def _process_sbd_message(self, msg):
+            text = msg.get_message_text().replace("\n", " ")
+
+            response = self._send_receive_messages("AT+SBDWT={}".format(text))
+            if response.split(self._lineend)[-1] != "OK":
+                raise ModemConnectionException("Error submitting message: {}".format(response))
+
+            response = self._send_receive_messages("AT+SBDIX")
+            if response.split(self._lineend)[-1] != "OK":
+                raise ModemConnectionException("Error submitting message: {}".format(response))
+
+            (mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued) = \
+                self._re_sbdix_response.search(response).groups()
+
+            # NOTE: Configure modems to not have ring alerts on SBD
+            # TODO: Needs to be indepedently checked, so should be dissolved to MT check function
+            if int(mt_status) == 1:
+                mt_message = self._send_receive_messages("AT+SBDRT")
+                mt_match = self._re_sbdrt_response.search(mt_message)
+                if mt_match:
+                    message = mt_message[mt_match.end():]
+                    msg_dt = datetime.now().strftime("%d%m%Y%H%M%S")
+                    msg_filename = os.path.join(self.mt_destination, "{}_{}.msg".format(
+                        mt_msn, msg_dt))
+                    logging.info("Received MT message, outputting to {}".format(msg_filename))
+
+                    try:
+                        with open(msg_filename, "w") as fh:
+                            fh.write(message)
+                    except (OSError, IOError):
+                        logging.error("Could not write {}, abandoning...".format(message))
+
+            response = self._send_receive_messages("AT+SBDD2")
+            if response.split(self._lineend)[-1] == "OK":
+                logging.debug("Message buffers cleared")
+
+            if int(mo_status) > 2:
+                logging.warning("Adding message back into queue due to MO status {}".format(mo_status))
+                self.send_sbd(msg, 5)
+
+                raise ModemConnectionException(
+                    "Failed to send message with MO Status: {}, breaking...".format(mo_status))
+
+        def _send_receive_messages(self, message, raw=False):
             """
             send message through data port and recieve reply. If no reply, will timeout according to the
             data_timeout config setting
@@ -311,25 +459,36 @@ class ModemConnection(object):
                 raise ModemConnectionException('Cannot send message; data port is not open')
             self._data.flushInput()
             self._data.flushOutput()
-            self._data.write("{}\r".format(message.strip()).encode())
 
-            logging.info('Message sent: "{}"'.format(message.strip()))
+            if not raw:
+                self._data.write("{}{}".format(message.strip(), self._lineend).encode("latin-1"))
+                logging.info('Message sent: "{}"'.format(message.strip()))
+            else:
+                self._data.write(message)
+                self._data.flushOutput()
+                logging.debug("Binary message of length {} bytes sent".format(len(message)))
 
             # It seems possible that we don't get a response back sometimes, not sure why. Facilitate breaking comms
             # for another attempt in this case, else we'll end up in an infinite loop
             read_attempts = 0
             bytes_read = 0
 
-            line = self._data.readline().decode('latin-1')
+            line = self._data.readline().decode()
             logging.debug("Line received: '{}'".format(line.strip()))
             reply = line
-            while line.strip() not in ["OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER"]:
+            while line.strip() not in [
+                # IRIDIUM messages
+                "OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER",
+                # RECEIVER messages
+                "GOFORIT", "NAMERECV"
+            ]\
+                    and not line.strip().startswith("CONNECT"):
                 line = self._data.readline().decode('latin-1').rstrip()
                 bytes_read += len(line)
                 logging.debug("Line received: '{}'".format(line))
                 if len(line):
                     read_attempts == 0
-                    reply += line + "\n"
+                    reply += line + self._lineend
                 else:
                     read_attempts += 1
                     if read_attempts >= self.read_attempts:
@@ -345,9 +504,43 @@ class ModemConnection(object):
 
             return reply
 
-        def send_sbd(self, message):
-            # TODO: Better way of identifying transactions with modem?
-            self.message_queue.put(("sbd", message))
+        def _signal_check(self, min_signal = 3):
+            """
+            _signal_check
+
+            Issue commands to the modem to evaluate the signal strength currently available
+
+            :param min_signal: The minimum allowed signal for a positive result
+            :return: boolean: True if signal checks OK, False otherwise
+            """
+
+            # Check we have a good enough signal to work with (>3)
+            signal_test = self._send_receive_messages("AT+CSQ")
+            if signal_test == "":
+                raise ModemConnectionException(
+                    "No response received for signal quality check")
+            signal_level = self._re_signal.search(signal_test)
+
+            if signal_level:
+                try:
+                    signal_level = int(signal_level.group(1))
+                    logging.debug("Got signal level {}".format(signal_level))
+                except ValueError:
+                    raise ModemConnectionException(
+                        "Could not interpret signal from response: {}".format(signal_test))
+            else:
+                raise ModemConnectionException(
+                    "Could not interpret signal from response: {}".format(signal_test))
+
+            if type(signal_level) == int and signal_level >= min_signal:
+                return True
+            return False
+
+        def send_sbd(self, message, timeout=None):
+            self.message_queue.put((self._priority_sbd_mo, message))
+
+        def send_file(self, filename, timeout=None):
+            self.message_queue.put((self._priority_file_mo, filename))
 
         @property
         def modem_lock(self):
@@ -364,7 +557,7 @@ class ModemConnection(object):
         logging.debug("ModemConnection constructor access")
         if not ModemConnection.instance:
             logging.debug("ModemConnection instantiation")
-            ModemConnection.instance = ModemConnection.__ModemConnection(**kwargs)
+            ModemConnection.instance = ModemConnection.__ModemConnection()
         else:
             logging.debug("ModemConnection already instantiated")
 
@@ -372,223 +565,43 @@ class ModemConnection(object):
         return getattr(self.instance, item)
 
 
-class RudicsConnection(BaseTask):
-    class __RudicsConnection:
-        def __init__(self,
-                     device="ppp0",
-                     max_checks=3,
-                     max_kill_tries=5,
-                     check_interval=20,
-                     watch_interval=30,
-                     wait_to_stop=10,
-                     dialer="pppd",
-                     **kwargs):
-            self.modem = ModemConnection()
-
-            logging.debug("Creating {0}".format(self.__class__.__name__))
-            self._device = device
-            self.re_ifip = re.compile(r'\s*inet \d+\.\d+\.\d+\.\d+')
-            self._interface_path = os.path.join(os.sep, "proc", "sys", "net", "ipv4", "conf", self._device)
-            self._proc = None
-            self._thread = None
-            self.running = False
-
-            self.max_checks = int(max_checks)
-            self.check_interval = int(check_interval)
-            self.watch_interval = int(watch_interval)
-            self.wait_to_stop = int(wait_to_stop)
-            self.max_kill_tries = int(max_kill_tries)
-
-            self.dialer = dialer
-
-            if self.dialer not in ["wvdial", "pppd"]:
-                raise RudicsConnectionException("Invalid modem type selected: {}".format(self.dialer))
-
-        def start(self, **kwargs):
-            logging.debug("Running start action for RudicsConnection")
-            self._thread = t.Thread(name=self.__class__.__name__, target=self.watch)
-
-            # We only need the exclusive use of the modem for Dialer, we don't actually use it via ModemConnection
-            self.modem.modem_lock.acquire()
-
-            logging.debug("Start comms, first checking for interface at {0}".format(self._interface_path))
-            success = False
-
-            if self.ready():
-                logging.info("We have a ready to go {0} interface".format(self._device))
-                # TODO: This would be an extremely weird situation, not necessarily successful
-                success = True
-            else:
-                logging.info("We have no {0} interface".format(self._device))
-
-                if self._start_dialer():
-                    self.running = True
-                    self._thread.start()
-                    success = True
-                    logging.info("Started {}".format(self.dialer))
-            return success
-
-        def ready(self):
-            if self._proc and os.path.exists(self._interface_path):
-                ipline = [x.strip() for x in
-                          subprocess.check_output(["ip", "addr", "show", self._device], universal_newlines=True).split(
-                              "\n")
-                          if self.re_ifip.match(x)]
-
-                if len(ipline) > 0:
-                    logging.debug("Active interface detected with {0}".format(ipline[0]))
-                    return True
-                else:
-                    logging.debug("Interface detected but no IP is present, so not ready to use...")
-                    return False
-            return False
-
-        def watch(self):
-            latched = False
-
-            while self.running:
-                rechecks = 1
-                if not latched:
-                    while not self.ready() \
-                            and rechecks <= self.max_checks:
-                        logging.debug(
-                            "We have yet to get an interface up on check {0} of {1}".format(rechecks, self.max_checks))
-                        tm.sleep(self.check_interval)
-                        rechecks += 1
-
-                    if rechecks >= self.max_checks \
-                            and not self.ready():
-                        logging.warning("We have failed to bring up the {0} interface".format(self._device))
-                        # The Dialer process has failed to arrange an interface, we should kill the whole thing
-                        self.running = False
-                        self.stop()
-                    else:
-                        if not latched:
-                            logging.info("We have the {0} interface at {1}".format(self._device, self._interface_path))
-                        latched = True
-                        self._run_ntpdate()
-                        tm.sleep(self.watch_interval)
-                else:
-                    if not self.ready():
-                        logging.info("Interface seems to have gone down, {} should attempt restart...".format(self.dialer))
-
-                    tm.sleep(self.watch_interval)
-
-        def stop(self, **kwargs):
-            logging.debug("Running stop action for RudicsConnection")
-
-            if self._proc:
-                logging.info("Terminating process with PID {0}".format(self._proc.pid))
-                self._proc.terminate()
-                tm.sleep(self.wait_to_stop)
-            self._terminate_dialer()
-
-        def _start_dialer(self):
-            logging.debug("Starting dialer and hoping it has a 'square go' at things...")
-
-            if self.dialer == "pppd":
-                cmd = shlex.split("pppd file /etc/ppp/peers/iridium")
-            elif self.dialer == "wvdial":
-                cmd = shlex.split("wvdial")
-            else:
-                raise RuntimeError("Cannot continue connecting, invalid dialer {} selected".format(self.dialer))
-
-            self._proc = subprocess.Popen(cmd, universal_newlines=True)
-
-            if self._proc.pid:
-                logging.debug("We have a {} instance at pid {}".format(self.dialer, self._proc.pid))
-                # TODO: Check for the existence / instantiation of the ppp child process, if we want to try more than once anyway
-                return True
-            logging.warning("We not not have a {} instance".format(self.dialer))
-            return False
-
-        def _stop_dialer(self, sig_to_stop, dialer_pids=[]):
-            """
-            We have no interface, kill dialer if it exists
-            :return: Boolean
-            """
-
-            if len(dialer_pids):
-                for pid in dialer_pids:
-                    logging.debug("PID {0} being given {1}".format(pid, sig_to_stop))
-                    os.kill(int(pid), sig_to_stop)
-
-            return True
-
-        def _terminate_dialer(self):
-            retries = 0
-            sig_to_stop = signal.SIGTERM
-
-            pids = self._dialer_pids()
-            if not len(pids):
-                self.modem.modem_lock.release()
-                return True
-
-            while len(pids) and retries < self.max_kill_tries:
-                if retries == self.max_kill_tries - 1:
-                    sig_to_stop = signal.SIGKILL
-                self._stop_dialer(sig_to_stop, pids)
-                tm.sleep(self.wait_to_stop)
-                retries += 1
-                logging.debug("Attempt {0} to stop Dialer".format(retries))
-                pids = self._dialer_pids()
-                if not len(pids):
-                    self.modem.modem_lock.release()
-                    return True
-
-            pppd_if_path = os.path.join("var", "run", "ppp0.pid")
-            if os.path.exists(pppd_if_path):
-                logging.warning("Unclean shutdown of pppd, removing PID file for interface")
-                os.unlink(pppd_if_path)
-
-            logging.error("We've not successfully killed pids {} but have to release the modem".format(",".join(pids)))
-            self.modem.modem_lock.release()
-            return False
-
-        def _dialer_pids(self):
-            logging.info("Checking for Dialer PIDs")
-            dialer_pids = [y[0]
-                           for y in [proc.split()
-                                     for proc in
-                                     subprocess.check_output(["ps", "-e"], universal_newlines=True).split('\n')
-                                     if len(proc.split()) == 4]
-                           if y[3].startswith(self.dialer)]
-
-            logging.info("{} Dialer PIDs found: {}".format(len(dialer_pids), ",".join(dialer_pids)))
-            return dialer_pids
-
-        def _run_ntpdate(self):
-            logging.info("Attempting to set system time from NTP")
-            try:
-                rc = subprocess.call(shlex.split("ntpdate time.nist.gov"))
-                if rc != 0:
-                    logging.error("Non-zero return code calling ntpdate: {}".format(rc))
-                else:
-                    subprocess.call(shlex.split("date >~/ntpdate.lastlog"))
-            # Broad and dirty
-            except Exception:
-                logging.error("Issue setting time using ntpdate: {}".format(sys.exc_info()))
-
-    instance = None
-
-    def __init__(self, **kwargs):
-        if not RudicsConnection.instance:
-            BaseTask.__init__(self, **kwargs)
-            RudicsConnection.instance = RudicsConnection.__RudicsConnection(**kwargs)
-
-    def __getattr__(self, item):
-        if hasattr(super(RudicsConnection, self), item):
-            return getattr(super(RudicsConnection, self), item)
-        return getattr(self.instance, item)
-
-
-class SBDSender(BaseTask):
+class BaseSender(BaseTask):
     def __init__(self, **kwargs):
         BaseTask.__init__(self, **kwargs)
         self.modem = ModemConnection()
 
+    def default_action(self, **kwargs):
+        raise NotImplementedError
+
+
+class FileSender(BaseSender):
+    def __init__(self, **kwargs):
+        BaseSender.__init__(self, **kwargs)
+
     def default_action(self, invoking_task, **kwargs):
-        logging.debug("Running default action for SBDMessage")
+        logging.debug("Running default action for FileSender")
+
+        if type(invoking_task.output) == list:
+            logging.debug("Invoking tasks output is a list, goooooood")
+
+            for f in invoking_task.output:
+                # TODO: Wrap this in a function to hash and SBD the file?
+                self.modem.send_file(f)
+        else:
+            logging.warning("File sender must be passed a task with output of a file list")
+        self.modem.start()
+
+    def send_file(self, filename):
+        self.modem.send_file(filename)
+        self.modem.start()
+
+
+class SBDSender(BaseSender):
+    def __init__(self, **kwargs):
+        BaseSender.__init__(self, **kwargs)
+
+    def default_action(self, invoking_task, **kwargs):
+        logging.debug("Running default action for SBDSender")
 
         message_text = str(invoking_task.state)
         warning = True if message_text.find("warning") >= 0 else False
@@ -623,15 +636,6 @@ class SBDMessage(object):
         return "{}".format(self._msg)[:120]
 
 
-class EmergencyConnection(RudicsConnection):
-    def default_action(self, **kwargs):
-        logging.warning("Creating an emergency connection: NOT IMPLEMENTED YET (TODO)")
-        pass
-
-
 class ModemConnectionException(Exception):
     pass
 
-
-class RudicsConnectionException(Exception):
-    pass

@@ -3,6 +3,8 @@ __pycache__
 .idea/
 build/
 dist/
+output/
 pyremotenode.egg-info/
+scratch/
 scratch.txt
 scratch/

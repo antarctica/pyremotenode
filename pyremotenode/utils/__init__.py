@@ -12,6 +12,7 @@ __all__ = ["Configuration"]
 def setup_logging(name,
                   level=logging.DEBUG,
                   filelog=True,
+                  # TODO: unsuitable default location
                   logdir=os.path.join(os.sep, "data", "pyremotenode", "logs"),
                   syslog=False):
     hostname = socket.gethostname().split(".")[0]

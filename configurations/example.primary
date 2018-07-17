@@ -1,0 +1,20 @@
+[general]
+log_level=      DEBUG
+
+[actions]
+;----------- CHECKS
+
+id1=       sleep_normal
+task1=     Sleep
+day_of_week1=   mon,tue,wed,fri,sat,sun
+onboot1=    1
+args1=
+    until_time= 1000
+    
+[ModemConnection]
+serial_port= /tmp/ttySP1
+serial_timeout= 2
+serial_baud= 9600
+modem_wait= 1
+;offline_start= 1155
+;offline_end= 1605

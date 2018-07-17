@@ -1,5 +1,6 @@
 import logging
 import re
+import os
 import shlex
 import subprocess
 
@@ -16,6 +17,7 @@ class Command(BaseTask):
         self._name = name if name else path
         self._args = [path]
         self._proc = None
+        self._output = None
 
         for k, v in kwargs.items():
             if k in ["id", "scheduler"]:
@@ -36,17 +38,31 @@ class Command(BaseTask):
             raise TaskException("The called command failed with an out of bound return code...")
 
         logging.info("Check return output: {0}".format(ret))
-        self.state = ret.strip()
-        return self.process_check_output(ret)
 
-    def process_check_output(self, output):
+        return self._process_cmd_output(ret)
+
+    def _process_cmd_output(self, ret):
+        raise NotImplementedError
+
+    @property
+    def output(self):
+        return self._output
+
+
+class CheckCommand(Command):
+    def __init__(self, *args, **kwargs):
+        Command.__init__(self, *args, **kwargs)
+
+    def _process_cmd_output(self, output):
+        self._output = output.strip()
+
         try:
             status = RE_OUTPUT.match(str(output)).group(1)
         except Exception:
             status = None
 
         if not status:
-            raise TaskException("An unparseable status was received from the called process: {}".format(str(output)))
+            raise TaskException("An unparseable status was received from the check: {}".format(str(output)))
         attr = "{0}".format(status.upper())
 
         logging.debug("Got valid status output: {0}".format(status))
@@ -56,3 +72,24 @@ class Command(BaseTask):
             return getattr(self, attr)
 
         return self.INVALID
+
+
+class ListCommand(Command):
+    def __init__(self, *args, **kwargs):
+        Command.__init__(self, *args, **kwargs)
+
+    def _process_cmd_output(self, output):
+        filelist = []
+
+        for f in output.split(os.linesep):
+            if os.path.exists(f) and os.path.isfile(f):
+                logging.debug("Listed {}".format(f))
+                filelist.append(f)
+            else:
+                logging.warning("Non-existent file dropped {}".format(f))
+
+        self._output = filelist
+
+        if not len(filelist):
+            return self.WARNING
+        return self.OK

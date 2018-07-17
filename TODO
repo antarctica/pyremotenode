@@ -8,3 +8,7 @@ BUG: a failed baseline wasn't resent the next day on SBD failure (because it ass
 BUGS: LoH processing needs to be identified as failed and VHF failure tolerance needs improving. !!!
 BUG: Deploy the fix for the issue with the scheduler that results in job failure for the days statically timed jobs when planning an all-nighter!
 Review cumulative modem usage in failure scenarios.
+Get rid of the configuration folder, these need to go into a different repo
+Sort the Command task runner out, it's messy and intermingles state and command output which has repercussions and requires refactoring elsewhere...
+Code documentation
+Some test cases...

@@ -13,9 +13,6 @@ from pprint import pformat
 from pyremotenode.utils.system import pid_file
 from pytz import utc
 
-PID_FILE = os.path.join(os.sep, "tmp", "{0}.pid".format(__name__))
-
-
 class Scheduler(object):
     """
         Master scheduler, MUST be run via the main thread
@@ -24,7 +21,7 @@ class Scheduler(object):
 
     def __init__(self, configuration,
                  start_when_fail=False,
-                 pid_file=PID_FILE):
+                 pid_file=None):
         logging.info("Creating scheduler")
         self._cfg = configuration
         self._pid = pid_file
@@ -73,8 +70,9 @@ class Scheduler(object):
 #                    except Exception:
 #                        logging.error("Error in main thread, something very wrong!")
         finally:
-            if os.path.exists(PID_FILE):
-                os.unlink(PID_FILE)
+            # TODO: I don't think this ever applies thanks to the context manager
+            if self._pid and os.path.exists(self._pid):
+                os.unlink(self._pid)
 
     def stop(self):
         self._running = False
@@ -107,6 +105,7 @@ class Scheduler(object):
 
     def schedule_immediate_action(self, obj, id, args):
         if obj and id:
+            # NOTE: 3.0.6 suffers from apscheduler issue #133 if system datetime is not UTC
             self._schedule.add_job(obj,
                                    id=id,
                                    coalesce=False,
@@ -214,12 +213,9 @@ class Scheduler(object):
         obj = self._schedule_task_instances[action['id']]
 
         if 'onboot' in action:
-            self._schedule.add_job(obj,
-                                   id="boot_{}".format(action['id']),
-                                   coalesce=False,
-                                   max_instances=1,
-                                   misfire_grace_time=60,
-                                   kwargs=kwargs)
+            self.schedule_immediate_action(obj,
+                                           "onboot_{}".format(action['id']),
+                                           kwargs)
 
         if 'interval' in action:
             logging.debug("Scheduling interval based job")

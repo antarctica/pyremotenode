@@ -50,7 +50,7 @@ class BaseTask(object):
             raise TaskException("There is no {} action for the task {}!".format(action, self.__class__.__name__))
 
     def default_action(self, **kwargs):
-        raise TaskException("There is no default exception defined for {}".format(self.__name__))
+        raise TaskException("There is no default action defined for {}".format(self.__name__))
 
     # TODO: I don't really like this, it mixes messaging and state flags - change sensibly
     @property
@@ -67,10 +67,14 @@ class BaseTask(object):
         self._state = state
 
 
-from pyremotenode.tasks.iridium import ModemConnection, RudicsConnection, SBDSender
+from pyremotenode.tasks.iridium import ModemConnection, FileSender, SBDSender
 from pyremotenode.tasks.loh import SendLoHBaselines
 from pyremotenode.tasks.ssh import SshTunnel
 from pyremotenode.tasks.ts7400 import Sleep
-from pyremotenode.tasks.utils import Command
+from pyremotenode.tasks.utils import ListCommand, CheckCommand
 
-__all__ = ["Command", "SendLoHBaselines", "Sleep", "RudicsConnection", "SBDSender", "SshTunnel"]
+__all__ = [
+    "CheckCommand",
+    "ListCommand",
+    "SendLoHBaselines",
+    "Sleep",]
