@@ -10,6 +10,15 @@ day_of_week1=   mon,tue,wed,fri,sat,sun
 onboot1=    1
 args1=
     until_time= 1000
+
+id2=        send_loh_baselines
+task2=      SendLoHBaselines
+time2=      1645
+args2=
+    source= /data/loh/baselines
+    fields= dt,e,n,u,q,sde,sdn,sdu
+    days_behind= 3
+
     
 [ModemConnection]
 serial_port= /tmp/ttySP1

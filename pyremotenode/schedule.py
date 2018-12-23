@@ -170,6 +170,7 @@ class Scheduler(object):
         # If before 11pm, we plan to the end of today
         # We then schedule another _plan_schedule for 11:01pm
         reference = datetime.today()
+        # TODO: Next scheduler planning should be configurable
         next_schedule = reference.replace(hour=23, minute=1, second=0, microsecond=0)
         remaining = next_schedule - reference
 
@@ -246,8 +247,10 @@ class Scheduler(object):
             dt = Scheduler.parse_datetime(action['date'], action['time'])
 
             if datetime.now() > dt:
-                logging.info("Job ID: {} does not need to be scheduled as it is prior to current time".format(action['id']))
-            elif dt > until:
+                logging.info("Job ID: {} needs to be scheduled tomorrow, it is prior to current time".format(action['id']))
+                dt += timedelta(days=1)
+
+            if dt > until:
                 logging.info(
                     "Job ID: {} does not need to be scheduled as it is after the next schedule planning time".
                     format(action['id']))
