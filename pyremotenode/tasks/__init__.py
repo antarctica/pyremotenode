@@ -77,4 +77,5 @@ __all__ = [
     "CheckCommand",
     "ListCommand",
     "SendLoHBaselines",
-    "Sleep",]
+    "Sleep",
+]

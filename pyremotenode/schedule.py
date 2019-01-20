@@ -13,6 +13,7 @@ from pprint import pformat
 from pyremotenode.utils.system import pid_file
 from pytz import utc
 
+
 class Scheduler(object):
     """
         Master scheduler, MUST be run via the main thread

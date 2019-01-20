@@ -6,6 +6,7 @@ import re
 import serial
 import shlex
 import signal
+import stat
 import struct
 import subprocess
 import sys
@@ -22,6 +23,7 @@ from pyremotenode.utils.config import Configuration
 # TODO: Major refactor as the serial comms have undermined the original layout for this module
 # TODO: We need to implement a shared key security system on the web-exposed service
 # TODO: This is intrisincally tied to the TS7400 
+
 
 class ModemLock(object):
     # TODO: Pass the configuration options for modem port (this is very LRAD specific)
@@ -319,23 +321,18 @@ class ModemConnection(object):
                         self._start_data_call()
 
             def _getc(size, timeout=self._data.timeout):
-#                logging.debug("READ SIZE: {}".format(size))
                 self._data.timeout = timeout
                 read = self._data.read(size=size) or None
-                logging.debug("READ DATA: {}".format(read))
                 return read
 
             def _putc(data, timeout=self._data.write_timeout):
-#                logging.debug("WRITE DATA: {}".format(data))
                 self._data.write_timeout = timeout
                 size = self._data.write(data=data)
-#                logging.debug("WRITE SIZE: {}".format(size))
                 return size
 
             # TODO: Catch errors and hangup the call!
             # TODO: Call thread needs to be separate to maintain uplink
             if self._start_data_call():
-                # NOTE: Dirty hack to send filename for this transfer through
                 self._send_filename(filename)
 
                 xfer = xmodem.XMODEM(_getc, _putc)
@@ -344,7 +341,6 @@ class ModemConnection(object):
                 xfer.send(stream, callback=_callback)
                 logging.debug("Finished transfer")
                 self._end_data_call()
-            self._dataxfer_errors
 
         def _send_filename(self, filename):
             buffer = bytearray()
@@ -358,9 +354,13 @@ class ModemConnection(object):
             # since we're using the length marker with otherwise fixed fields. We just use 0x1b
             # as validation of the last byte of the message
             bfile = os.path.basename(filename).encode("latin-1")[:255]
+            file_length = os.stat(filename)[stat.ST_SIZE]
             length = len(bfile)
             buffer += struct.pack("BB", 0x1a, length)
             buffer += struct.pack("{}s".format(length), bfile)
+            buffer += struct.pack("<i", file_length)
+            # TODO: We should ideally be implementing the SAFs chunking functionality
+            buffer += struct.pack("<ii", 1, 1)
             buffer += struct.pack("qB", binascii.crc32(bfile) & 0xffffffff, 0x1b)
 
             res = self._send_receive_messages(buffer, raw=True)
@@ -398,6 +398,8 @@ class ModemConnection(object):
                 logging.debug("Sleeping another second to wait for the line")
                 tm.sleep(1)
 
+        # TODO: Needs to use the AT+SBDWB message
+        # TODO: Needs to impose a modem specific limit!
         def _process_sbd_message(self, msg):
             text = msg.get_message_text().replace("\n", " ")
 
@@ -504,7 +506,7 @@ class ModemConnection(object):
 
             return reply
 
-        def _signal_check(self, min_signal = 3):
+        def _signal_check(self, min_signal=3):
             """
             _signal_check
 
