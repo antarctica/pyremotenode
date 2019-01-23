@@ -109,11 +109,13 @@ class ModemConnection(object):
             self.serial_timeout = cfg['ModemConnection']['serial_timeout']
             self.serial_baud = cfg['ModemConnection']['serial_baud']
             self.modem_wait = cfg['ModemConnection']['modem_wait']
+            self.modem_power = cfg['ModemConnection']['modem_power_dio'] \
+                if 'modem_power_dio' in cfg['ModemConnection'] else None
 
             self._data = None
             self._dataxfer_errors = 0
 
-            self._modem_lock = ModemLock()      # Lock message buffer and physical modem
+            self._modem_lock = ModemLock(self.modem_power) if self.modem_power else ModemLock()
             self._thread_lock = t.RLock()       # Lock thread creation
             self._modem_wait = float(self.modem_wait)
             self._message_queue = queue.PriorityQueue()

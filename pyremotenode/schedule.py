@@ -7,7 +7,7 @@ import sys
 import pyremotenode
 import pyremotenode.tasks
 
-from apscheduler.schedulers.background import BlockingScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import date, datetime, time, timedelta
 from pprint import pformat
 from pyremotenode.utils.system import pid_file
@@ -16,13 +16,22 @@ from pytz import utc
 
 class Scheduler(object):
     """
-        Master scheduler, MUST be run via the main thread
+        :type Scheduler
+
+        Master scheduler, MUST be run via the main thread, not derived from anything else and wraps APScheduler
         Doesn't necessarily needs to be a singleton though, just only one starts at a time...
     """
 
     def __init__(self, configuration,
                  start_when_fail=False,
                  pid_file=None):
+        """
+        Constructor for the scheduler, needs to be instantiated for PyRemoteNode
+
+        :param configuration:       pyremotenode.utils.config.Configuration instance
+        :param start_when_fail:     allows scheduler to start even when scheuling planning fails (eg. with invalid tasks)
+        :param pid_file:            PID file that the scheduler should manage during its lifetime
+        """
         logging.info("Creating scheduler")
         self._cfg = configuration
         self._pid = pid_file
@@ -30,7 +39,7 @@ class Scheduler(object):
         self._running = False
         self._start_when_fail = start_when_fail
 
-        self._schedule = BlockingScheduler(timezone=utc)
+        self._schedule = BackgroundScheduler(timezone=utc)
         self._schedule_events = []
         self._schedule_action_instances = {}
         self._schedule_task_instances = {}
@@ -38,6 +47,13 @@ class Scheduler(object):
         self.init()
 
     def init(self):
+        """
+        Actual initialiser, called from constructor, configures signal trap handling, task instances and schedule plan.
+        Initial checks are also meant to be run (labelled with on_start)
+
+        :exception: ScheduleRunError if we can't plan or initialise the scheduler with tasks
+        :return:    None
+        """
         self._configure_signals()
         self._configure_instances()
 
@@ -47,12 +63,26 @@ class Scheduler(object):
             raise ScheduleRunError("Failed on an unhealthy initial check, avoiding scheduler startup...")
 
     def initial_checks(self):
+        """
+        Run checks labelled with on_start
+        TODO: How do we execute arbitary actions via the same mechanism as apscheduler?
+
+        :return: Boolean for initial checks are successful
+        """
         for action in ['on_start' in cfg and cfg['on_start'] for cfg in self._cfg['actions']]:
-            # TODO: How do we execute arbitary actions via the same mechanism as apscheduler?
             pass
         return True
 
     def run(self):
+        """
+        This is the primary scheduling implementation, which utilises the BackgroundScheduler to process actions leaving
+        the main thread active to process MT messages that might arrive (initiating new actions in the plan, potentially),
+        configuration updates and any other activities that might be implemented in the future to control the scheduler.
+
+        In theory this should not exit at present, unless activities are added allowing shutdown
+
+        :return:    None
+        """
         logging.info("Starting scheduler")
 
         try:
@@ -61,15 +91,18 @@ class Scheduler(object):
 
                 self._schedule.print_jobs()
                 self._schedule.start()
-# TODO: BackgroundScheduler - use once we need it...
-#                while self._running:
-#                    try:
-#                        logging.debug("Scheduler sleeping")
-#                        tm.sleep(10)
-#
-#                        # TODO: Check for configurations / updates
-#                    except Exception:
-#                        logging.error("Error in main thread, something very wrong!")
+
+                while self._running:
+                    try:
+                        logging.debug("Main thread sleeping")
+                        tm.sleep(60)
+
+                        # TODO: Check for configurations / updates
+                        # TODO: Process MT SBD messages
+                    except Exception:
+                        logging.error("Error in main thread, something very wrong!")
+                    finally:
+                        self._running = False
         finally:
             # TODO: I don't think this ever applies thanks to the context manager
             if self._pid and os.path.exists(self._pid):
