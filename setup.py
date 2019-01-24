@@ -20,6 +20,7 @@ setup(
     url = 'http://www.antarctica.ac.uk',
     install_requires=[
         "apscheduler",
-        "pyserial"
+        "pyserial",
+        "xmodem"
     ]
 )
