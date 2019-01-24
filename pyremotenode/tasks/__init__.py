@@ -57,7 +57,7 @@ class BaseTask(object):
     def state(self):
         try:
             int(self._state)
-        except ValueError:
+        except TypeError:
             return self._state
         return [s for s in ["OK", "WARNING", "CRITICAL", "INVALID"]
                 if getattr(self, s) == self._state]
