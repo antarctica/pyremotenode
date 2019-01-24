@@ -49,6 +49,14 @@ class Command(BaseTask):
         return self._output
 
 
+class RunCommand(Command):
+    def __init__(self, *args, **kwargs):
+        Command.__init__(self, *args, **kwargs)
+
+    def _process_cmd_output(self, output):
+        return self.OK
+
+
 class CheckCommand(Command):
     def __init__(self, *args, **kwargs):
         Command.__init__(self, *args, **kwargs)

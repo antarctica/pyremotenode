@@ -71,9 +71,10 @@ from pyremotenode.tasks.iridium import ModemConnection, FileSender, SBDSender
 from pyremotenode.tasks.loh import SendLoHBaselines
 from pyremotenode.tasks.ssh import SshTunnel
 from pyremotenode.tasks.ts7400 import Sleep
-from pyremotenode.tasks.utils import ListCommand, CheckCommand
+from pyremotenode.tasks.utils import ListCommand, RunCommand, CheckCommand
 
 __all__ = [
+    "RunCommand",
     "CheckCommand",
     "ListCommand",
     "SendLoHBaselines",
