@@ -3,12 +3,11 @@
 import argparse
 import logging
 import os
-import resource
-import sys
 import traceback
 
 from pyremotenode.schedule import Scheduler
 from pyremotenode.utils import Configuration, setup_logging
+from pyremotenode.utils.system import background_fork
 
 if __name__ == '__main__':
     a = argparse.ArgumentParser()
@@ -25,43 +24,11 @@ if __name__ == '__main__':
     args = a.parse_args()
 
     if not args.no_daemon:
-        try:
-            pid = os.fork()
-            if pid > 0:
-                sys.exit(0)
-        except OSError as e:
-            print("Fork failed: {} ({})".format(e.errno, e.strerror), file=sys.stderr)
-            sys.exit(1)
-
-        os.chdir("/")
-        os.setsid()
-        os.umask(0)
-
-        maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
-        if maxfd == resource.RLIM_INFINITY:
-            maxfd = 1024
-
-        # Iterate through and close all file descriptors.
-        for fd in range(0, maxfd):
-            try:
-                os.close(fd)
-            except OSError:      # ERROR, fd wasn't open to begin with (ignored)
-                pass
-
-        if hasattr(os, "devnull"):
-            REDIRECT_TO = os.devnull
-        else:
-            REDIRECT_TO = "/dev/null"
-        os.open(REDIRECT_TO, os.O_RDWR)
-        os.dup2(0, 1)
-        os.dup2(0, 2)
-
-        # NOTE: Normally to be extra careful we can double fork, but it's not really
-        # necessary given we know how this will be instantiated
+        background_fork()
 
     cfg = Configuration(args.config).config
 
-    setup_logging("PyRemoteNode",
+    setup_logging("pyrm-{}".format(args.config),
                   level=getattr(logging, cfg['general']['log_level']),
                   syslog=True)
 

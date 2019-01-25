@@ -12,12 +12,13 @@ RE_OUTPUT = re.compile(r'^.*(ok|warning|critical|invalid)\s*\-.+', flags=re.IGNO
 
 
 class Command(BaseTask):
-    def __init__(self, path, name=None, **kwargs):
+    def __init__(self, path, name=None, binary=False, **kwargs):
         BaseTask.__init__(self, **kwargs)
         self._name = name if name else path
         self._args = [path]
         self._proc = None
         self._output = None
+        self._binary = binary
 
         for k, v in kwargs.items():
             if k in ["id", "scheduler"]:
@@ -31,7 +32,7 @@ class Command(BaseTask):
         ret = None
 
         try:
-            ret = subprocess.check_output(args=shlex.split(" ".join(self._args)), universal_newlines=True)
+            ret = subprocess.check_output(args=shlex.split(" ".join(self._args)), universal_newlines=not self._binary)
         except subprocess.CalledProcessError as e:
             logging.warning("Got error code {0} and message: {1}".format(e.returncode, e.output))
             # TODO: Evaluate how this will be handled in the end

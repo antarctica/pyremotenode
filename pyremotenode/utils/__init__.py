@@ -3,44 +3,47 @@ import logging
 import logging.handlers
 import os
 import socket
+import sys
 
-from .config import Configuration
+from pyremotenode.utils.config import Configuration
 
 __all__ = ["Configuration"]
 
 
-def setup_logging(name,
-                  level=logging.DEBUG,
-                  filelog=True,
-                  # TODO: unsuitable default location
+def setup_logging(name='',
+                  level=logging.INFO,
+                  verbose=False,
                   logdir=os.path.join(os.sep, "data", "pyremotenode", "logs"),
-                  syslog=False):
+                  logformat="[{asctime} :{levelname:>10} {module:>20}] - {message}",
+                  syslog=False,
+                  ):
     hostname = socket.gethostname().split(".")[0]
 
     formatter = logging.Formatter(
-        fmt="[{asctime} :{levelname:>10} {module:>20}] - {message}",
+        fmt=logformat,
         datefmt="%d-%m-%y %T",
         style='{'
     )
+    if verbose:
+        level = logging.DEBUG
 
-    logging.basicConfig()
-    log = logging.getLogger()
-    log.setLevel(level)
-    log.handlers = []
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+    handler.setLevel(level)
 
-    stdout_log = logging.StreamHandler()
-    stdout_log.setLevel(level)
-    stdout_log.setFormatter(formatter)
-    log.addHandler(stdout_log)
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(level)
 
-    if filelog:
-        if not os.path.isdir(logdir):
-            os.makedirs(logdir, exist_ok=True)
-
-        file_hndlr = logging.FileHandler(os.path.join(logdir, dt.datetime.now().strftime("%d-%m-%Y.log")))
-        file_hndlr.setLevel(level)
-        file_hndlr.setFormatter(formatter)
-        log.addHandler(file_hndlr)
-
-    if syslog:
-        log.warning("Syslog logging not yet implemented")
+    if logdir:
+        file_handler = logging.FileHandler(
+            os.path.join(logdir, "{}{}{}.log".format(
+                name,
+                ("" if len(name) == 0 else "-"),
+                dt.datetime.now().strftime("%Y-%m-%d"))))
+        file_handler.setLevel(level)
+        file_formatter = logging.Formatter(
+            fmt='%(asctime)-25s%(levelname)-17s%(message)s',
+            datefmt='%Y-%m-%dT%H:%M:%S'
+        )
+        file_handler.setFormatter(file_formatter)
+        logging.getLogger().addHandler(file_handler)

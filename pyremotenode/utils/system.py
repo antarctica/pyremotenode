@@ -1,6 +1,43 @@
 import fcntl
 import logging
 import os
+import resource
+import sys
+
+
+def background_fork():
+    try:
+        pid = os.fork()
+        if pid > 0:
+            sys.exit(0)
+    except OSError as e:
+        print("Fork failed: {} ({})".format(e.errno, e.strerror))
+        sys.exit(1)
+
+    os.chdir("/")
+    os.setsid()
+    os.umask(0)
+
+    maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+    if maxfd == resource.RLIM_INFINITY:
+        maxfd = 1024
+
+    # Iterate through and close all file descriptors.
+    for fd in range(0, maxfd):
+        try:
+            os.close(fd)
+        except OSError:  # ERROR, fd wasn't open to begin with (ignored)
+            pass
+
+    if hasattr(os, "devnull"):
+        REDIRECT_TO = os.devnull
+    else:
+        REDIRECT_TO = "/dev/null"
+    os.open(REDIRECT_TO, os.O_RDWR)
+    os.dup2(0, 1)
+    os.dup2(0, 2)
+
+    # NOTE: Normally we should double fork, but not currently doing so
 
 
 class pid_file:
