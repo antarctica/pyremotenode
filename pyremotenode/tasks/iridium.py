@@ -125,8 +125,7 @@ class ModemConnection(object):
 
             self.read_attempts = int(cfg['ModemConnection']['read_attempts']) \
                 if 'read_attempts' in cfg['ModemConnection'] else 5
-            self.sbd_gap = int(cfg['ModemConnection']['sbd_gap']) \
-                if 'sbd_gap' in cfg['ModemConnection'] else 1
+
             # NOTE: This really isn't required but the fucking modem is driving me nuts and it just remains for control
             self.msg_timeout = float(cfg['ModemConnection']['msg_timeout']) \
                 if 'msg_timeout' in cfg['ModemConnection'] else 0.1
@@ -136,9 +135,19 @@ class ModemConnection(object):
                 if 'reg_check_interval' in cfg['ModemConnection'] else 10
             self.mt_destination = cfg['ModemConnection']['mt_destination'] \
                 if 'mt_destination' in cfg['ModemConnection'] else os.path.join(os.sep, "data", "pyremotenode", "messages")
+
+            self.sbd_attempts = int(cfg['ModemConnection']['sbd_attempts']) \
+                if 'sbd_attempts' in cfg['ModemConnection'] else 3
+            self.sbd_gap = int(cfg['ModemConnection']['sbd_gap']) \
+                if 'sbd_gap' in cfg['ModemConnection'] else 1
+
             # Defeats https://github.com/pyserial/pyserial/issues/59 with socat usage
             self.virtual = bool(cfg['ModemConnection']['virtual']) \
                 if 'virtual' in cfg['ModemConnection'] else False
+            # Allows adaptation to Rockblocks reduced AT command set
+            self.rockblock = bool(cfg['ModemConnection']['rockblock']) \
+                if 'rockblock' in cfg['ModemConnection'] else False
+
             # MO dial up vars
             self.dialup_number = cfg['ModemConnection']['dialup_number'] \
                 if 'dialup_number' in cfg['ModemConnection'] else None
@@ -240,33 +249,34 @@ class ModemConnection(object):
                     raise ModemConnectionException(
                         "Modem appears to already be open, wasn't previously closed!?!")
 
-            reg_checks = 0
-            registered = False
+            if not self.rockblock:
+                reg_checks = 0
+                registered = False
 
-            while reg_checks < self.max_reg_checks:
-                logging.info("Checking registration on Iridium: attempt {} of {}".format(reg_checks, self.max_reg_checks))
-                registration = self._send_receive_messages("AT+CREG?")
-                check = True
+                while reg_checks < self.max_reg_checks:
+                    logging.info("Checking registration on Iridium: attempt {} of {}".format(reg_checks, self.max_reg_checks))
+                    registration = self._send_receive_messages("AT+CREG?")
+                    check = True
 
-                if registration.split(self._lineend)[-1] != "OK":
-                    logging.warning("There's an issue with the registration response, won't parse: {}".
-                                    format(registration))
-                    check = False
+                    if registration.split(self._lineend)[-1] != "OK":
+                        logging.warning("There's an issue with the registration response, won't parse: {}".
+                                        format(registration))
+                        check = False
 
-                if check:
-                    (reg_type, reg_stat) = self._re_creg_response.search(registration).groups()
-                    if int(reg_stat) not in [1, 5]:
-                        logging.info("Not currently registered on network: status {}".format(int(reg_stat)))
-                    else:
-                        logging.info("Registered with status {}".format(int(reg_stat)))
-                        registered = True
-                        break
-                logging.debug("Waiting for registration")
-                tm.sleep(self.reg_check_interval)
-                reg_checks += 1
+                    if check:
+                        (reg_type, reg_stat) = self._re_creg_response.search(registration).groups()
+                        if int(reg_stat) not in [1, 5]:
+                            logging.info("Not currently registered on network: status {}".format(int(reg_stat)))
+                        else:
+                            logging.info("Registered with status {}".format(int(reg_stat)))
+                            registered = True
+                            break
+                    logging.debug("Waiting for registration")
+                    tm.sleep(self.reg_check_interval)
+                    reg_checks += 1
 
-            if not registered:
-                raise ModemConnectionException("Failed to register on network")
+                if not registered:
+                    raise ModemConnectionException("Failed to register on network")
 
         def _process_outstanding_messages(self):
             """
@@ -285,8 +295,6 @@ class ModemConnection(object):
                 try:
                     if msg[0] == self._priority_sbd_mo:
                         self._process_sbd_message(msg[1])
-                        # Don't reprocess this message goddammit!
-                        tm.sleep(self.sbd_gap)
                     elif msg[0] == self._priority_file_mo:
                         # TODO: We need to batch file transfers together onto a single
                         # long running call
@@ -400,21 +408,38 @@ class ModemConnection(object):
                 logging.debug("Sleeping another second to wait for the line")
                 tm.sleep(1)
 
-        # TODO: Needs to use the AT+SBDWB message
-        # TODO: Needs to impose a modem specific limit!
+        @staticmethod
+        def calculate_sbd_checksum(payload):
+            s = sum(payload)
+            chk = (s & 0xFF00) >> 8
+            chk += s & 0xFF
+            return chk
+
+        # TODO: Needs to impose a modem specific limit in length! 340 for 9603 (rockblock) and 1920 for 9522B
         def _process_sbd_message(self, msg):
             text = msg.get_message_text().replace("\n", " ")
 
-            response = self._send_receive_messages("AT+SBDWT={}".format(text))
-            if response.split(self._lineend)[-1] != "OK":
-                raise ModemConnectionException("Error submitting message: {}".format(response))
+            response = self._send_receive_messages("AT+SBDWB=".format(len(text)))
+            if response.split(self._lineend)[-1] != "READY":
+                raise ModemConnectionException("Error preparing for binary message: {}".format(response))
 
-            response = self._send_receive_messages("AT+SBDIX")
-            if response.split(self._lineend)[-1] != "OK":
-                raise ModemConnectionException("Error submitting message: {}".format(response))
+            payload = text.encode()
+            payload += ModemConnection.calculate_sbd_checksum(payload)
+            response = self._send_receive_messages(payload, raw=True)
 
-            (mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued) = \
-                self._re_sbdix_response.search(response).groups()
+            if response.split(self._lineend)[-3] != "0" \
+                and response.split(self._lineend)[-1] != "OK":
+                raise ModemConnectionException("Error writing output binary for SBD".format(response))
+
+            mo_status = None
+
+            while not mo_status or int(mo_status) > 4:
+                response = self._send_receive_messages("AT+SBDIX")
+                if response.split(self._lineend)[-1] != "OK":
+                    raise ModemConnectionException("Error submitting message: {}".format(response))
+
+                mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued = \
+                    self._re_sbdix_response.search(response).groups()
 
             # NOTE: Configure modems to not have ring alerts on SBD
             # TODO: Needs to be indepedently checked, so should be dissolved to MT check function
@@ -438,8 +463,8 @@ class ModemConnection(object):
             if response.split(self._lineend)[-1] == "OK":
                 logging.debug("Message buffers cleared")
 
-            if int(mo_status) > 2:
-                logging.warning("Adding message back into queue due to MO status {}".format(mo_status))
+            if int(mo_status) > 4:
+                logging.warning("Adding message back into queue due to persistent MO status {}".format(mo_status))
                 self.send_sbd(msg, 5)
 
                 raise ModemConnectionException(
@@ -469,7 +494,6 @@ class ModemConnection(object):
                 logging.info('Message sent: "{}"'.format(message.strip()))
             else:
                 self._data.write(message)
-                self._data.flushOutput()
                 logging.debug("Binary message of length {} bytes sent".format(len(message)))
 
             # It seems possible that we don't get a response back sometimes, not sure why. Facilitate breaking comms
