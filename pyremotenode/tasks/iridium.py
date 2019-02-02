@@ -584,24 +584,25 @@ class ModemConnection(object):
 
             reply = bytearray()
             modem_response = False
-            start = tm.clock()
+            start = datetime.utcnow()
 
             while not modem_response:
                 tm.sleep(0.1)
                 reply += self._data.read_all()
                 bytes_read += len(reply)
 
-                duration = tm.clock() - start
+                duration = (datetime.utcnow() - start).total_seconds()
                 if not len(reply):
                     if duration > self.msg_timeout:
                         logging.warning("We've read 0 bytes continuously for {} seconds, abandoning reads...".format(
                             duration
                         ))
                         # It's up to the caller to handle this scenario, just give back what's available...
-                        break
+                        raise ModemConnectionException("Response timeout from serial line...")
                     else:
                         logging.debug("Waiting for response...")
                         tm.sleep(self.msg_wait_period)
+                        continue
 
                 start = tm.clock()
                 if not dont_decode:

@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 import traceback
 
 
@@ -13,11 +14,15 @@ class BaseTask(object):
     CRITICAL = 2
     INVALID = -1
 
-    def __init__(self, id, scheduler=None, **kwargs):
+    def __init__(self, id,
+                 scheduler=None,
+                 not_due=None,
+                 **kwargs):
         self._sched = scheduler
         self._id = id
         self._state = None
         self._last_state = self._state
+        self._ready = True
 
     def __call__(self, action=None, **kwargs):
         if not action:
@@ -65,6 +70,14 @@ class BaseTask(object):
     @state.setter
     def state(self, state):
         self._state = state
+
+    @property
+    def ready(self):
+        return self._ready
+
+    @ready.setter
+    def ready(self, ready):
+        self._ready = ready
 
 
 from pyremotenode.tasks.iridium import ModemConnection, FileSender, SBDSender, WakeupTask

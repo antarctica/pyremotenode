@@ -8,6 +8,7 @@ import pyremotenode
 import pyremotenode.tasks
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.events import EVENT_SCHEDULER_START, EVENT_JOB_EXECUTED, EVENT_JOB_MISSED, EVENT_JOB_ERROR
 from datetime import datetime, time, timedelta
 from pprint import pformat
 from pyremotenode.utils.system import pid_file
@@ -85,7 +86,7 @@ class Scheduler(object):
 
         :return:    None
         """
-        hk_sleep = int(self._cfg['general']['housekeeping_sleep'])
+        hk_sleep = int(self.settings['housekeeping_sleep'])
         logging.info("Starting scheduler")
         logging.debug("Housekeeping at {} second intervals".format(hk_sleep))
 
@@ -114,39 +115,43 @@ class Scheduler(object):
         # TODO: Check shutdown process
         self._schedule.shutdown()
 
-    def add_ok(self, id):
-        action = self._build_configuration(id, 'ok')
+    def add_ok(self, job_id):
+        action = self._build_configuration(job_id, 'ok')
         if action:
             logging.debug("Submitting ok-status invocation id {}".format(action['id']))
             self.schedule_immediate_action(action['obj'], action['id'], action['args'])
 
-    def add_warning(self, id):
-        action = self._build_configuration(id, 'warn')
+    def add_warning(self, job_id):
+        action = self._build_configuration(job_id, 'warn')
         if action:
             logging.debug("Submitting warning-status invocation id {}".format(action['id']))
             self.schedule_immediate_action(action['obj'], action['id'], action['args'])
 
-    def add_critical(self, id):
-        action = self._build_configuration(id, 'crit')
+    def add_critical(self, job_id):
+        action = self._build_configuration(job_id, 'crit')
         if action:
             logging.debug("Submitting critical-status invocation id {}".format(action['id']))
             self.schedule_immediate_action(action['obj'], action['id'], action['args'])
 
-    def add_invalid(self, id):
-        action = self._build_configuration(id, 'invalid')
+    def add_invalid(self, job_id):
+        action = self._build_configuration(job_id, 'invalid')
         if action:
             logging.debug("Submitting invalid-status invocation id {}".format(action['id']))
             self.schedule_immediate_action(action['obj'], action['id'], action['args'])
 
-    def schedule_immediate_action(self, obj, id, args):
-        if obj and id:
+    def schedule_immediate_action(self, obj, job_id, args):
+        if obj and job_id:
             # NOTE: 3.0.6 suffers from apscheduler issue #133 if system datetime is not UTC
-            self._schedule.add_job(obj,
-                                   id=id,
-                                   coalesce=False,
-                                   max_instances=1,
-                                   misfire_grace_time=60,
-                                   kwargs=args)
+            return self._schedule.add_job(obj,
+                                          id=job_id,
+                                          coalesce=False,
+                                          max_instances=1,
+                                          misfire_grace_time=60,
+                                          kwargs=args)
+
+    @property
+    def settings(self):
+        return self._cfg['general']
 
     # ==================================================================================
 
@@ -203,8 +208,8 @@ class Scheduler(object):
         # If after 11pm, we plan to the next day
         # If before 11pm, we plan to the end of today
         # We then schedule another _plan_schedule for 11:01pm
-        reference = datetime.today()
         # TODO: Next scheduler planning should be configurable
+        reference = datetime.today()
         next_schedule = reference.replace(hour=23, minute=1, second=0, microsecond=0)
         remaining = next_schedule - reference
 
@@ -223,21 +228,21 @@ class Scheduler(object):
 
         self._schedule_events.append(job)
 
-        self._plan_schedule_tasks(reference, next_schedule)
+        self._plan_schedule_tasks(next_schedule)
 
-    def _plan_schedule_tasks(self, start, until):
+    def _plan_schedule_tasks(self, until):
         # TODO: This needs to take account of wide spanning controls!
         # TODO: grace period for datetime.utcnow()
         start = datetime.utcnow()
 
         try:
-            for id, action in self._schedule_action_instances.items():
-                logging.info("Planning {}".format(id))
-                self._plan_schedule_task(start, until, action)
+            for job_id, action in self._schedule_action_instances.items():
+                logging.info("Planning {}".format(job_id))
+                self._plan_schedule_task(until, action)
         except:
             raise ScheduleConfigurationError
 
-    def _plan_schedule_task(self, start, until, action):
+    def _plan_schedule_task(self, until, action):
         logging.debug("Got item {0}".format(action))
         timings = []
         cron_args = ('year','minute','day','week','day_of_week','hour','minute','second','start_date','end_date')
@@ -246,16 +251,17 @@ class Scheduler(object):
         kwargs = action['args']
 
         obj = self._schedule_task_instances[action['id']]
+        job = None
 
         if 'onboot' in action:
-            self.schedule_immediate_action(obj,
-                                           "onboot_{}".format(action['id']),
-                                           kwargs)
+            job = self.schedule_immediate_action(obj,
+                                                 "onboot_{}".format(action['id']),
+                                                    kwargs)
 
         if 'interval' in action:
             logging.debug("Scheduling interval based job")
 
-            self._schedule.add_job(obj,
+            job = self._schedule.add_job(obj,
                                    id=action['id'],
                                    trigger='interval',
                                    minutes=int(action['interval']),
@@ -265,7 +271,7 @@ class Scheduler(object):
         elif 'interval_secs' in action:
             logging.debug("Scheduling seconds based interval job")
 
-            self._schedule.add_job(obj,
+            job = self._schedule.add_job(obj,
                                    id=action['id'],
                                    trigger='interval',
                                    seconds=int(action['interval_secs']),
@@ -286,7 +292,7 @@ class Scheduler(object):
                     "Job ID: {} does not need to be scheduled as it is after the next schedule planning time".
                     format(action['id']))
             else:
-                self._schedule.add_job(obj,
+                job = self._schedule.add_job(obj,
                                        id=action['id'],
                                        trigger='date',
                                        coalesce=True,
@@ -298,7 +304,7 @@ class Scheduler(object):
 
             job_args = dict([(k, action[k]) for k in cron_args if k in action])
             logging.debug(job_args)
-            self._schedule.add_job(obj,
+            job = self._schedule.add_job(obj,
                                    id=action['id'],
                                    trigger='cron',
                                    coalesce=True,
@@ -311,6 +317,22 @@ class Scheduler(object):
                 raise ScheduleConfigurationError
             else:
                 logging.warning("{} will only be run at startup".format(action['id']))
+
+        if 'waiton' in action:
+            # TODO: We can add further parameters for checking the event, at the mo we just care that it's run
+            def resume_job(evt):
+                if (evt.job_id == action['waiton'] or evt.job_id == "onboot_{}".format(action['waiton']))\
+                        and evt.code == EVENT_JOB_EXECUTED:
+                    logging.info("Resuming execution of job ID {}".format(action['id']))
+                    job.resume()
+
+            def pause_job(evt):
+                logging.info("Setting job ID {} to wait for {}".format(action['id'], action['waiton']))
+                job.pause()
+
+            self._schedule.add_listener(resume_job, EVENT_JOB_EXECUTED)
+            self._schedule.add_listener(pause_job, EVENT_SCHEDULER_START)
+
         return timings
 
     @staticmethod
