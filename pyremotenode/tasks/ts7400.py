@@ -4,11 +4,8 @@ import re
 import shlex
 import subprocess as sp
 
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta
 from pyremotenode.tasks import BaseTask
-from pyremotenode.utils import setup_logging
-
-from pyremotenode.tasks.iridium import SBDSender
 
 
 class Sleep(BaseTask):
@@ -67,11 +64,10 @@ class Sleep(BaseTask):
             datetime.combine(dt, tm).strftime("%d/%m/%Y %H:%M:%S"), seconds))
         iso_dt = datetime.now()
         iso_dt = iso_dt.replace(microsecond=0)
-        cmd = "/home/pyremotenode/bin/goto_sleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
+        cmd = "goto_sleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
 
         logging.info("Running Sleep command: {}".format(cmd))
-        for h in logging.getLogger().handlers:
-            h.flush()
+        # TODO: We never see the last of the logs?
         rc = sp.call(shlex.split(cmd))
 
         if rc != 0:
@@ -122,7 +118,7 @@ class Sleep(BaseTask):
 
 class StatusUpdate(BaseTask):
     def __init__(self, **kwargs):
-        super(Sleep, self).__init__(**kwargs)
+        super(StatusUpdate, self).__init__(**kwargs)
 
     def default_action(self, **kwargs):
         raise NotImplementedError("StatusUpdate not yet implemented")

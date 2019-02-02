@@ -8,7 +8,7 @@ import pyremotenode
 import pyremotenode.tasks
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 from pprint import pformat
 from pyremotenode.utils.system import pid_file
 from pytz import utc
@@ -83,7 +83,9 @@ class Scheduler(object):
 
         :return:    None
         """
+        hk_sleep = int(self._cfg['general']['housekeeping_sleep'])
         logging.info("Starting scheduler")
+        logging.debug("Housekeeping at {} second intervals".format(hk_sleep))
 
         try:
             with pid_file(self._pid):
@@ -95,14 +97,12 @@ class Scheduler(object):
                 while self._running:
                     try:
                         logging.debug("Main thread sleeping")
-                        tm.sleep(60)
+                        tm.sleep(int(hk_sleep))
 
                         # TODO: Check for configurations / updates
                         # TODO: Process MT SBD messages
                     except Exception:
-                        logging.error("Error in main thread, something very wrong!")
-                    finally:
-                        self._running = False
+                        logging.error("Error in main thread, something very wrong, schedule will continue...")
         finally:
             # TODO: I don't think this ever applies thanks to the context manager
             if self._pid and os.path.exists(self._pid):

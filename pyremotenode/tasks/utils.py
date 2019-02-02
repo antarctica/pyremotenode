@@ -46,7 +46,7 @@ class Command(BaseTask):
         raise NotImplementedError
 
     @property
-    def output(self):
+    def message(self):
         return self._output
 
 

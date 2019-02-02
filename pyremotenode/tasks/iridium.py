@@ -5,24 +5,23 @@ import queue
 import re
 import serial
 import shlex
-import signal
 import stat
 import struct
 import subprocess
-import sys
 import threading as t
 import time as tm
 import traceback
 import xmodem
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pyremotenode.tasks import BaseTask
+from pyremotenode.tasks.utils import CheckCommand
 from pyremotenode.utils.config import Configuration
 
 # TODO: Major refactor as the serial comms have undermined the original layout for this module
 # TODO: We need to implement a shared key security system on the web-exposed service
-# TODO: This is intrisincally tied to the TS7400 
+# TODO: This whole implementation is intrisincally tied to the TS7400
 
 
 class ModemLock(object):
@@ -95,7 +94,7 @@ class ModemConnection(object):
         _re_signal = re.compile(r'^\+CSQ:(\d)', re.MULTILINE)
         _re_sbdix_response = re.compile(r'^\+SBDIX:\s*(\d+), (\d+), (\d+), (\d+), (\d+), (\d+)', re.MULTILINE)
         _re_creg_response = re.compile(r'^\+CREG:\s*(\d+),\s*(\d+),?.*', re.MULTILINE)
-        _re_sbdrt_response = re.compile(r'^\+SBDRT:', re.MULTILINE)
+        _re_msstm_response = re.compile(r'^\-MSSTM: ([0-9a-f]{8}).*', re.MULTILINE | re.IGNORECASE)
 
         _priority_sbd_mo = 1
         _priority_file_mo = 2
@@ -159,9 +158,38 @@ class ModemConnection(object):
 
             logging.info("Ready to connect to modem on {}".format(self.serial_port))
 
+        def get_iridium_system_time(self):
+            logging.debug("Getting Iridium system time")
+            now = 0
+            # Iridium epoch is 11-May-2014 14:23:55 (currently, IT WILL CHANGE)
+            ep = datetime(2014, 5, 11, 14, 23, 55)
+
+            try:
+                self.modem_lock.acquire()
+                self._initialise_modem()
+
+                # And time is measured in 90ms intervals eg. 62b95972
+                result = self._send_receive_messages("AT-MSSTM")
+                if result.split(self._lineend)[-1] != "OK":
+                    raise ModemConnectionException("Error code response from modem, cannot continue")
+
+                result = self._re_msstm_response.match(result).group(1)
+
+                now = timedelta(seconds=int(result, 16) / (1. / 0.09))
+            except ModemConnectionException:
+                logging.exception("Cannot get Iridium time")
+                return False
+            except ValueError:
+                logging.error("Cannot use value for Iridium time")
+                return False
+            except TypeError:
+                logging.error("Cannot cast value for Iridium time")
+                return False
+            finally:
+                self.modem_lock.release()
+            return now + ep
+
         def start(self):
-            # TODO: Need to draft implementation of the threading for message sending...
-            # Actually, don't need to do that as the queue
             with self._thread_lock:
                 if not self._thread:
                     logging.info("Starting modem thread")
@@ -189,17 +217,16 @@ class ModemConnection(object):
                                 logging.info("Processed {} outgoing messages".format(num))
                             else:
                                 logging.warning("Not enough signal to perform activities")
+                        logging.info("Reached end of modem usage for this iteration...")
                 except ModemConnectionException:
                     logging.error("Out of logic modem operations, breaking to restart...")
                     logging.error(traceback.format_exc())
                 except queue.Empty:
-                    logging.info("{} messages processed, {} left in queue".format(i, self.message_queue.qsize()))
+                    logging.info("{} messages processed, {} left in queue".format(num, self.message_queue.qsize()))
                 except Exception:
                     logging.error("Modem inoperational or another error occurred")
                     logging.error(traceback.format_exc())
                 finally:
-                    logging.info("Reached end of modem usage for this iteration...")
-
                     if self._data and self._data.is_open:
                         logging.debug("Closing and removing modem serial connection")
                         self._data.close()
@@ -245,9 +272,11 @@ class ModemConnection(object):
                 if not self._data.is_open:
                     logging.info("Opening existing modem serial connection")
                     self._data.open()
+## TODO: Shared object now between threads, at startup, don't think this needs to be present
                 else:
-                    raise ModemConnectionException(
-                        "Modem appears to already be open, wasn't previously closed!?!")
+                    logging.warning("Modem appears to already be open, wasn't previously closed!?!")
+#                    raise ModemConnectionException(
+#                        "Modem appears to already be open, wasn't previously closed!?!")
 
             if not self.rockblock:
                 reg_checks = 0
@@ -288,7 +317,7 @@ class ModemConnection(object):
 
             :return: Number of messages processed
             """
-
+            num = 0
             logging.debug("Processing currently queued messages...")
             while not self.message_queue.empty():
                 msg = self.message_queue.get(timeout=1)
@@ -352,6 +381,9 @@ class ModemConnection(object):
                 logging.debug("Finished transfer")
                 self._end_data_call()
 
+                return True
+            return False
+
         def _send_filename(self, filename):
             buffer = bytearray()
 
@@ -408,18 +440,11 @@ class ModemConnection(object):
                 logging.debug("Sleeping another second to wait for the line")
                 tm.sleep(1)
 
-        @staticmethod
-        def calculate_sbd_checksum(payload):
-            s = sum(payload)
-            chk = (s & 0xFF00) >> 8
-            chk += s & 0xFF
-            return chk
-
         # TODO: Needs to impose a modem specific limit in length! 340 for 9603 (rockblock) and 1920 for 9522B
         def _process_sbd_message(self, msg):
             text = msg.get_message_text().replace("\n", " ")
 
-            response = self._send_receive_messages("AT+SBDWB=".format(len(text)))
+            response = self._send_receive_messages("AT+SBDWB={}".format(len(text)))
             if response.split(self._lineend)[-1] != "READY":
                 raise ModemConnectionException("Error preparing for binary message: {}".format(response))
 
@@ -427,12 +452,13 @@ class ModemConnection(object):
             payload += ModemConnection.calculate_sbd_checksum(payload)
             response = self._send_receive_messages(payload, raw=True)
 
-            if response.split(self._lineend)[-3] != "0" \
+            if response.split(self._lineend)[-2] != "0" \
                 and response.split(self._lineend)[-1] != "OK":
                 raise ModemConnectionException("Error writing output binary for SBD".format(response))
 
             mo_status = None
 
+            # TODO: BEGIN: this block with repeated SBDIX can overwrite the receiving message buffers
             while not mo_status or int(mo_status) > 4:
                 response = self._send_receive_messages("AT+SBDIX")
                 if response.split(self._lineend)[-1] != "OK":
@@ -442,22 +468,45 @@ class ModemConnection(object):
                     self._re_sbdix_response.search(response).groups()
 
             # NOTE: Configure modems to not have ring alerts on SBD
-            # TODO: Needs to be indepedently checked, so should be dissolved to MT check function
             if int(mt_status) == 1:
-                mt_message = self._send_receive_messages("AT+SBDRT")
-                mt_match = self._re_sbdrt_response.search(mt_message)
-                if mt_match:
-                    message = mt_message[mt_match.end():]
-                    msg_dt = datetime.now().strftime("%d%m%Y%H%M%S")
-                    msg_filename = os.path.join(self.mt_destination, "{}_{}.msg".format(
-                        mt_msn, msg_dt))
-                    logging.info("Received MT message, outputting to {}".format(msg_filename))
+                mt_message = self._send_receive_messages("AT+SBDRB", dont_decode=True)
 
+                if mt_message:
                     try:
-                        with open(msg_filename, "w") as fh:
-                            fh.write(message)
-                    except (OSError, IOError):
-                        logging.error("Could not write {}, abandoning...".format(message))
+                        mt_message = mt_message[0:int(mt_len)+4]
+                        length = mt_message[0:2]
+                        message = mt_message[2:-2]
+                        chksum = mt_message[-2:]
+                    except IndexError:
+                        raise ModemConnectionException(
+                            "Message indexing was not successful for message ID {} length {}".format(
+                                mt_msn, mt_len))
+                    else:
+                        length = struct.unpack(">H", length)
+                        calcd_chksum = ModemConnection.calculate_sbd_checksum(message)
+                        chksum = struct.unpack(">H", chksum)
+
+                        if length != len(message):
+                            logging.warning("Message length indicated {} is not the same as actual message: {}".format(
+                                length, len(message)
+                            ))
+                        elif chksum != calcd_chksum:
+                            logging.warning("Message checksum {} is not the same as calculated checksum: {}".format(
+                                chksum, calcd_chksum
+                            ))
+                        else:
+                            msg_dt = datetime.now().strftime("%d%m%Y%H%M%S")
+                            msg_filename = os.path.join(self.mt_destination, "{}_{}.msg".format(
+                                mt_msn, msg_dt))
+                            logging.info("Received MT message, outputting to {}".format(msg_filename))
+
+                            try:
+                                with open(msg_filename, "w") as fh:
+                                    fh.write(message)
+                            except (OSError, IOError):
+                                logging.error("Could not write {}, abandoning...".format(message))
+
+            # TODO: END: this block with repeated SBDIX can overwrite the receiving message buffers
 
             response = self._send_receive_messages("AT+SBDD2")
             if response.split(self._lineend)[-1] == "OK":
@@ -469,8 +518,9 @@ class ModemConnection(object):
 
                 raise ModemConnectionException(
                     "Failed to send message with MO Status: {}, breaking...".format(mo_status))
+            return True
 
-        def _send_receive_messages(self, message, raw=False):
+        def _send_receive_messages(self, message, raw=False, dont_decode=False):
             """
             send message through data port and recieve reply. If no reply, will timeout according to the
             data_timeout config setting
@@ -501,22 +551,31 @@ class ModemConnection(object):
             read_attempts = 0
             bytes_read = 0
 
-            line = self._data.readline().decode()
-            logging.debug("Line received: '{}'".format(line.strip()))
+            line = self._data.readline()
+            logging.debug("Line received: '{}'".format(line.decode().strip()))
             reply = line
+
+            # TODO: This implementation is a bit shit, it's error prone to false positives
             while line.strip() not in [
                 # IRIDIUM messages
-                "OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER",
+                "OK", "ERROR", "BUSY", "NO DIALTONE", "NO CARRIER", "RING", "NO ANSWER", "READY",
                 # RECEIVER messages
                 "GOFORIT", "NAMERECV"
             ]\
                     and not line.strip().startswith("CONNECT"):
-                line = self._data.readline().decode('latin-1').rstrip()
+                line = self._data.readline()
+
+                if not dont_decode:
+                    line = line.decode('latin-1').rstrip()
+
                 bytes_read += len(line)
                 logging.debug("Line received: '{}'".format(line))
+
                 if len(line):
                     read_attempts == 0
-                    reply += line + self._lineend
+                    reply += line
+                    if not dont_decode:
+                        reply += self._lineend
                 else:
                     read_attempts += 1
                     if read_attempts >= self.read_attempts:
@@ -592,6 +651,14 @@ class ModemConnection(object):
     def __getattr__(self, item):
         return getattr(self.instance, item)
 
+    @staticmethod
+    def calculate_sbd_checksum(payload):
+        chk = bytearray()
+        s = sum(payload)
+        chk.append((s & 0xFF00) >> 8)
+        chk.append(s & 0xFF)
+        return chk
+
 
 class BaseSender(BaseTask):
     def __init__(self, **kwargs):
@@ -609,10 +676,10 @@ class FileSender(BaseSender):
     def default_action(self, invoking_task, **kwargs):
         logging.debug("Running default action for FileSender")
 
-        if type(invoking_task.output) == list:
+        if type(invoking_task.message) == list:
             logging.debug("Invoking tasks output is a list, goooooood")
 
-            for f in invoking_task.output:
+            for f in invoking_task.message:
                 # TODO: Wrap this in a function to hash and SBD the file?
                 self.modem.send_file(f)
         else:
@@ -631,7 +698,7 @@ class SBDSender(BaseSender):
     def default_action(self, invoking_task, **kwargs):
         logging.debug("Running default action for SBDSender")
 
-        message_text = str(invoking_task.state)
+        message_text = str(invoking_task.message)
         warning = True if message_text.find("warning") >= 0 else False
         critical = True if message_text.find("critical") >= 0 else False
 
@@ -667,3 +734,50 @@ class SBDMessage(object):
 class ModemConnectionException(Exception):
     pass
 
+# ----------------------------
+
+
+class WakeupTask(CheckCommand):
+    def __init__(self, **kwargs):
+        BaseTask.__init__(self, **kwargs)
+        self.modem = ModemConnection()
+
+    def default_action(self, max_gap, **kwargs):
+        ir_now = self.modem.get_iridium_system_time()
+
+        system_time_format = "%a %b %d %H:%M:%S %Z %Y"
+        system_setformat = "%a %b %d %H:%M:%S UTC %Y"
+        status = "ok - "
+
+        dt = datetime.utcnow()
+        output = "SysDT: {} ".format(dt.strftime("%d-%m-%Y %H:%M:%S"))
+
+        if not ir_now:
+            logging.warning("Unable to get Iridium time...")
+            return "critical - Unable to initiate Iridium: {}".format(ir_now)
+
+        if ir_now:
+            output += "IRDT: {}".format(ir_now.strftime("%d-%m-%Y %H:%M:%S"))
+        else:
+            status = "warning - "
+
+        if (dt - ir_now).total_seconds() > int(max_gap):
+            try:
+                rc = subprocess.call(shlex.split("date -s '{}'".format(
+                                     ir_now.strftime(system_setformat))))
+            except Exception:
+                logging.warning("Could not set system time to Iridium time")
+                status = "critical -"
+                change = "Cannot set SysDT"
+            else:
+                logging.info("Changed system time {} to {}".format(
+                    dt.strftime("%d-%m-%Y %H:%M:%S"),
+                    ir_now.strftime("%d-%m-%Y %H:%M:%S")
+                ))
+                change = "SysDT set to GPSDT"
+        else:
+            logging.info("Iridium time and system time within acceptable difference of {}".format(max_gap))
+            change = "OK"
+
+        self._output = " ".join([status, output, change])
+        return self._process_cmd_output(self._output)

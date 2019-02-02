@@ -10,9 +10,9 @@ from pyremotenode.utils import Configuration, setup_logging
 from pyremotenode.utils.system import background_fork
 
 if __name__ == '__main__':
+    # Don't use anything here that initiates the logging root handler
     a = argparse.ArgumentParser()
-    a.add_argument("config", help="Configuration to use for running remote node",
-                   type=Configuration.check_file)
+    a.add_argument("config", help="Configuration to use for running remote node")
     # TODO: Naming of service as a parameter...
     a.add_argument("--start-when-fail", "-s", help="Start even if initial monitor checks fail",
                    action="store_true", default=False)
@@ -21,16 +21,17 @@ if __name__ == '__main__':
     a.add_argument("--no-pidfile", "-np", help="Don't check or create PID file",
                    default=False, action="store_true")
     a.add_argument("--no-daemon", "-n", help="Do not daemon", default=False, action="store_true")
+    a.add_argument("--verbose", "-v", help="Debugging information", default=False, action="store_true")
     args = a.parse_args()
+
+    setup_logging("{}".format(os.path.basename(args.config)),
+                  verbose=args.verbose)
 
     if not args.no_daemon:
         background_fork()
 
+    Configuration.check_file(args.config)
     cfg = Configuration(args.config).config
-
-    setup_logging("pyrm-{}".format(args.config),
-                  level=getattr(logging, cfg['general']['log_level']),
-                  syslog=True)
 
     try:
         pidfile = args.pidfile if not args.no_pidfile else None
