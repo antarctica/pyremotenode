@@ -29,7 +29,9 @@ class Scheduler(object):
         Constructor for the scheduler, needs to be instantiated for PyRemoteNode
 
         :param configuration:       pyremotenode.utils.config.Configuration instance
-        :param start_when_fail:     allows scheduler to start even when scheuling planning fails (eg. with invalid tasks)
+        :param start_when_fail:     allows scheduler to start even when scheuling planning fails
+                                    (eg. with invalid tasks): sounds good, but be careful as you might be ignoring
+                                    items that will bite you in the arse later!
         :param pid_file:            PID file that the scheduler should manage during its lifetime
         """
         logging.info("Creating scheduler")
@@ -96,7 +98,6 @@ class Scheduler(object):
 
                 while self._running:
                     try:
-                        logging.debug("Main thread sleeping")
                         tm.sleep(int(hk_sleep))
 
                         # TODO: Check for configurations / updates
@@ -183,7 +184,7 @@ class Scheduler(object):
         kwargs = action["{}_args".format(task_type)] if "{}_args".format(task_type) in action else {}
         kwargs['invoking_task'] = self._schedule_task_instances[id]
 
-        id = "{}_{}".format(action['id'], datetime.now().strftime("%H%m%s"))
+        id = "{}_{}".format(action['id'], datetime.utcnow().strftime("%H%m%s"))
 
         # NOTE: We don't provide scheduler, triggered actions can't invoke further events (yet)
         obj = TaskInstanceFactory.get_item(
@@ -226,8 +227,8 @@ class Scheduler(object):
 
     def _plan_schedule_tasks(self, start, until):
         # TODO: This needs to take account of wide spanning controls!
-        # TODO: grace period for datetime.now()
-        start = datetime.now()
+        # TODO: grace period for datetime.utcnow()
+        start = datetime.utcnow()
 
         try:
             for id, action in self._schedule_action_instances.items():
@@ -276,7 +277,7 @@ class Scheduler(object):
 
             dt = Scheduler.parse_datetime(action['date'], action['time'])
 
-            if datetime.now() > dt:
+            if datetime.utcnow() > dt:
                 logging.info("Job ID: {} needs to be scheduled tomorrow, it is prior to current time".format(action['id']))
                 dt += timedelta(days=1)
 
@@ -325,7 +326,7 @@ class Scheduler(object):
 
             if date_str is not None:
                 parsed_dt = datetime.strptime(date_str, "%d%m").date()
-                year = datetime.now().year
+                year = datetime.utcnow().year
                 dt = datetime(year=year, month=parsed_dt.month, day=parsed_dt.day)
             else:
                 dt = datetime.today().date()

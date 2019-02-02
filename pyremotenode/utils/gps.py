@@ -12,9 +12,9 @@ def get_time(serial_port,
              time_limit=None):
     com = None
     dt = None
-    start = datetime.datetime.now()
+    start = datetime.datetime.utcnow()
 
-    while not dt or (time_limit and (start - datetime.datetime.now()).total_seconds() < time_limit):
+    while not dt or (time_limit and (start - datetime.datetime.utcnow()).total_seconds() < time_limit):
         if com is None:
             try:
                 com = serial.Serial(

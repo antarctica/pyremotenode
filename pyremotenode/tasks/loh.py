@@ -60,7 +60,7 @@ class SendLoHBaselines(BaseTask):
 
         days_behind = int(days_behind)
         current_day = 1
-        min_dt = datetime.combine((datetime.now() - timedelta(days=days_behind)).date(), time(hour=0, minute=0, second=0))
+        min_dt = datetime.combine((datetime.utcnow() - timedelta(days=days_behind)).date(), time(hour=0, minute=0, second=0))
 
         self._proclist = {fn: fn_dt for fn, fn_dt in self._proclist.items() if fn_dt >= min_dt}
 
@@ -69,7 +69,7 @@ class SendLoHBaselines(BaseTask):
         while current_day <= days_behind:
             logging.info("Processing files from {} days ago".format(current_day))
 
-            dt = datetime.now() - timedelta(days=current_day)
+            dt = datetime.utcnow() - timedelta(days=current_day)
             (year, month, day) = (str(dt.year)[2:], "{:02d}".format(dt.month), "{:02d}".format(dt.day))
             source_path = os.path.join(self._source, str(dt.year), str(dt.month), str(dt.day))
 

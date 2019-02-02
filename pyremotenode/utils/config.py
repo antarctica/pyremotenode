@@ -13,6 +13,10 @@ ARRAY_SECTIONS=(
 )
 
 
+class ConfigurationError(BaseException):
+    pass
+
+
 class Configuration(object):
     RE_KEY_NUMS = re.compile(r'^(.+[^0-9])([0-9]+)$')
 
@@ -48,6 +52,9 @@ class Configuration(object):
                         key = k
                     cur_section[key] = self.__process_value(ini.get(section, k), key)
                     cur_section = self.config[section]
+
+            if 'read_attempts' in self.config['ModemConnection']:
+                raise ConfigurationError("read_attempts is deprecated, serial reads max out based on msg_timeout")
 
         def __process_value(self, value, key=None):
             force = False

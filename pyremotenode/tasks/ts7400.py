@@ -22,9 +22,9 @@ class Sleep(BaseTask):
 
         if type(until_date) == str:
             if until_date.lower() == "today":
-                dt = datetime.now().date()
+                dt = datetime.utcnow().date()
             elif until_date.lower() == "tomorrow":
-                dt = (datetime.now() + timedelta(days=1)).date()
+                dt = (datetime.utcnow() + timedelta(days=1)).date()
             elif self._re_date.match(until_date):
                 dt = datetime.strptime(until_date, "%d%m%Y").date()
             else:
@@ -35,11 +35,11 @@ class Sleep(BaseTask):
 
         tm = datetime.strptime(until_time, "%H%M").time()
 
-        seconds = (datetime.combine(dt, tm) - datetime.now()).total_seconds()
+        seconds = (datetime.combine(dt, tm) - datetime.utcnow()).total_seconds()
         # Evaluate minimum seconds, push to tomorrow if we've gone past the time today
         if seconds < 60:
             dt = dt + timedelta(days=1)
-            seconds = (datetime.combine(dt, tm) - datetime.now()).total_seconds()
+            seconds = (datetime.combine(dt, tm) - datetime.utcnow()).total_seconds()
 
         # Parse reboot time
         try:
@@ -62,7 +62,7 @@ class Sleep(BaseTask):
         TS7400Utils.rtc_clock()
         logging.info("Sleeping until {}, for {} seconds".format(
             datetime.combine(dt, tm).strftime("%d/%m/%Y %H:%M:%S"), seconds))
-        iso_dt = datetime.now()
+        iso_dt = datetime.utcnow()
         iso_dt = iso_dt.replace(microsecond=0)
         cmd = "goto_sleep {} {}".format(str(int(seconds + reboot_diff)), datetime.isoformat(iso_dt))
 
@@ -83,7 +83,7 @@ class Sleep(BaseTask):
         path = os.path.expandvars(os.path.join("$HOME", "reboot.txt"))
 
         if os.path.exists(path) and \
-                        (datetime.now() - datetime.fromtimestamp(os.stat(path).st_mtime)).total_seconds() < 86400:
+                        (datetime.utcnow() - datetime.fromtimestamp(os.stat(path).st_mtime)).total_seconds() < 86400:
             with open(path, "r") as fh:
                 line = fh.readline().strip()
         else:
@@ -98,7 +98,7 @@ class Sleep(BaseTask):
 
         # TODO: This only works with sleeping less than a day
         if os.path.exists(path) and \
-                        (datetime.now() - datetime.fromtimestamp(os.stat(path).st_mtime)).total_seconds() < 2 * 86400:
+                        (datetime.utcnow() - datetime.fromtimestamp(os.stat(path).st_mtime)).total_seconds() < 2 * 86400:
             with open(path, "r") as fh:
                 line = fh.readline().strip()
                 (secs, dt) = line.split(",")
