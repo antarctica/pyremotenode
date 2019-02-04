@@ -183,17 +183,19 @@ class ModemConnection(object):
             ep = datetime(2014, 5, 11, 14, 23, 55)
 
             try:
-                self.modem_lock.acquire()
-                self._initialise_modem()
+                if self.modem_lock.acquire():
+                    self._initialise_modem()
 
-                # And time is measured in 90ms intervals eg. 62b95972
-                result = self._send_receive_messages("AT-MSSTM")
-                if result.splitlines()[-1] != "OK":
-                    raise ModemConnectionException("Error code response from modem, cannot continue")
+                    # And time is measured in 90ms intervals eg. 62b95972
+                    result = self._send_receive_messages("AT-MSSTM")
+                    if result.splitlines()[-1] != "OK":
+                        raise ModemConnectionException("Error code response from modem, cannot continue")
 
-                result = self._re_msstm_response.match(result).group(1)
+                    result = self._re_msstm_response.match(result).group(1)
 
-                now = timedelta(seconds=int(result, 16) / (1. / 0.09))
+                    now = timedelta(seconds=int(result, 16) / (1. / 0.09))
+                else:
+                    return None
             except ModemConnectionException:
                 logging.exception("Cannot get Iridium time")
                 return False
