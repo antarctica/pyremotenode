@@ -24,12 +24,12 @@ if __name__ == '__main__':
     a.add_argument("--verbose", "-v", help="Debugging information", default=False, action="store_true")
     args = a.parse_args()
 
-    setup_logging("{}".format(os.path.basename(args.config)),
-                  verbose=args.verbose)
-
     if not args.no_daemon:
         background_fork()
 
+    setup_logging("{}".format(os.path.basename(args.config)),
+                  verbose=args.verbose)
+    
     Configuration.check_file(args.config)
     cfg = Configuration(args.config).config
 
