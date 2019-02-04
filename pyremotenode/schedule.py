@@ -4,15 +4,18 @@ import signal
 import time as tm
 import sys
 
-import pyremotenode
-import pyremotenode.tasks
+from datetime import datetime, time, timedelta
+from pprint import pformat
+from pytz import utc
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.events import EVENT_SCHEDULER_START, EVENT_JOB_EXECUTED, EVENT_JOB_MISSED, EVENT_JOB_ERROR
-from datetime import datetime, time, timedelta
-from pprint import pformat
+
+import pyremotenode
+import pyremotenode.tasks
+
+from pyremotenode.messaging import MessageProcessor
 from pyremotenode.utils.system import pid_file
-from pytz import utc
 
 
 class Scheduler(object):
@@ -100,11 +103,9 @@ class Scheduler(object):
                 while self._running:
                     try:
                         tm.sleep(int(hk_sleep))
-
-                        # TODO: Check for configurations / updates
-                        # TODO: Process MT SBD messages
+                        MessageProcessor.ingest(self)
                     except Exception:
-                        logging.error("Error in main thread, something very wrong, schedule will continue...")
+                        logging.exception("Error in main thread, something very wrong, schedule will continue...")
         finally:
             # TODO: I don't think this ever applies thanks to the context manager
             if self._pid and os.path.exists(self._pid):

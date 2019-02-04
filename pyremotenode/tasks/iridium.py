@@ -136,7 +136,9 @@ class ModemConnection(object):
             self._running = False
 
             self.msg_timeout = float(cfg['ModemConnection']['msg_timeout']) \
-                if 'msg_timeout' in cfg['ModemConnection'] else 10.0
+                if 'msg_timeout' in cfg['ModemConnection'] else 20.0
+            self.sbd_xfer_timeout = float(cfg['ModemConnection']['sbd_xfer_timeout']) \
+                if 'sbd_xfer_timeout' in cfg['ModemConnection'] else 60.0
             self.msg_wait_period = float(cfg['ModemConnection']['msg_wait_period']) \
                 if 'msg_wait_period' in cfg['ModemConnection'] else 1.0
 
@@ -483,7 +485,7 @@ class ModemConnection(object):
 
             # TODO: BEGIN: this block with repeated SBDIX can overwrite the receiving message buffers
             while not mo_status or int(mo_status) > 4:
-                response = self._send_receive_messages("AT+SBDIX")
+                response = self._send_receive_messages("AT+SBDIX", timeout_override=self.sbd_xfer_timeout)
                 if response.splitlines()[-1] != "OK":
                     raise ModemConnectionException("Error submitting message: {}".format(response))
 
@@ -552,7 +554,7 @@ class ModemConnection(object):
                     "Failed to send message with MO Status: {}, breaking...".format(mo_status))
             return True
 
-        def _send_receive_messages(self, message, raw=False, dont_decode=False):
+        def _send_receive_messages(self, message, raw=False, dont_decode=False, timeout_override=None):
             """
             send message through data port and recieve reply. If no reply, will timeout according to the
             data_timeout config setting
@@ -586,6 +588,10 @@ class ModemConnection(object):
             modem_response = False
             start = datetime.utcnow()
 
+            msg_timeout = self.msg_timeout
+            if timeout_override:
+                msg_timeout = timeout_override
+
             while not modem_response:
                 tm.sleep(0.1)
                 reply += self._data.read_all()
@@ -593,7 +599,7 @@ class ModemConnection(object):
 
                 duration = (datetime.utcnow() - start).total_seconds()
                 if not len(reply):
-                    if duration > self.msg_timeout:
+                    if duration > msg_timeout:
                         logging.warning("We've read 0 bytes continuously for {} seconds, abandoning reads...".format(
                             duration
                         ))
@@ -604,7 +610,7 @@ class ModemConnection(object):
                         tm.sleep(self.msg_wait_period)
                         continue
 
-                start = tm.clock()
+                start = datetime.utcnow()
                 if not dont_decode:
                     logging.debug("Reply received: '{}'".format(reply.decode().strip()))
 
@@ -691,7 +697,6 @@ class ModemConnection(object):
         return chk
 
 
-
 class BaseSender(BaseTask):
     def __init__(self, **kwargs):
         BaseTask.__init__(self, **kwargs)
@@ -759,8 +764,8 @@ class SBDMessage(object):
 
     def get_message_text(self):
         if self._dt:
-            return "{}:{}".format(self._dt.strftime("%d-%m-%Y %H:%M:%S"), self._msg[:100])
-        return "{}".format(self._msg)[:120]
+            return "{}:{}".format(self._dt.strftime("%d-%m-%Y %H:%M:%S"), self._msg[:1900])
+        return "{}".format(self._msg)[:1920]
 
 
 class ModemConnectionException(Exception):

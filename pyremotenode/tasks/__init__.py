@@ -22,6 +22,7 @@ class BaseTask(object):
         self._id = id
         self._state = None
         self._last_state = self._state
+        # TODO: Currently not used yet
         self._ready = True
 
     def __call__(self, action=None, **kwargs):

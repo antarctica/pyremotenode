@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, time
 from operator import itemgetter
 from pyremotenode.tasks import BaseTask
 
-from pyremotenode.tasks.iridium import SBDSender, ModemConnection
+from pyremotenode.tasks.iridium import SBDSender
 
 
 # TODO: Might be better to thread this, and add an execution check for the pre-processing
@@ -148,7 +148,7 @@ class SendLoHBaselines(BaseTask):
                 agg_data = list(bs_pair) + list(df(bs_agg_data))
                 data_str = ",".join([str(df) for df in agg_data])
 
-                if len(data_str) > 120:
+                if len(data_str) > 1920:
                     logging.warning("Message is too long: {}".format(data_str))
                 sbd.send_message(data_str, include_date=False)
 
