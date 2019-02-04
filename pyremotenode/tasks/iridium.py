@@ -181,9 +181,11 @@ class ModemConnection(object):
             now = 0
             # Iridium epoch is 11-May-2014 14:23:55 (currently, IT WILL CHANGE)
             ep = datetime(2014, 5, 11, 14, 23, 55)
+            locked = False
 
             try:
-                if self.modem_lock.acquire():
+                locked = self.modem_lock.acquire()
+                if locked:
                     self._initialise_modem()
 
                     # And time is measured in 90ms intervals eg. 62b95972
@@ -206,7 +208,8 @@ class ModemConnection(object):
                 logging.exception("Cannot cast value for Iridium time")
                 return False
             finally:
-                self.modem_lock.release()
+                if locked:
+                    self.modem_lock.release()
             return now + ep
 
         def start(self):
