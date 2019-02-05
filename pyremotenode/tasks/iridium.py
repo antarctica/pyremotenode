@@ -127,7 +127,7 @@ class ModemConnection(object):
             self._dataxfer_errors = 0
 
             self._modem_lock = ModemLock(self.modem_power) if self.modem_power else ModemLock()
-            self._thread_lock = t.RLock()       # Lock thread creation
+            self._thread_lock = t.Lock()       # Lock thread creation
             self._modem_wait = float(self.modem_wait)
             self._message_queue = queue.PriorityQueue()
             self._mt_queued = False
@@ -177,40 +177,41 @@ class ModemConnection(object):
             logging.info("Ready to connect to modem on {}".format(self.serial_port))
 
         def get_iridium_system_time(self):
-            logging.debug("Getting Iridium system time")
-            now = 0
-            # Iridium epoch is 11-May-2014 14:23:55 (currently, IT WILL CHANGE)
-            ep = datetime(2014, 5, 11, 14, 23, 55)
-            locked = False
+            with self._thread_lock:
+                logging.debug("Getting Iridium system time")
+                now = 0
+                # Iridium epoch is 11-May-2014 14:23:55 (currently, IT WILL CHANGE)
+                ep = datetime(2014, 5, 11, 14, 23, 55)
+                locked = False
 
-            try:
-                locked = self.modem_lock.acquire()
-                if locked:
-                    self._initialise_modem()
+                try:
+                    locked = self.modem_lock.acquire()
+                    if locked:
+                        self._initialise_modem()
 
-                    # And time is measured in 90ms intervals eg. 62b95972
-                    result = self._send_receive_messages("AT-MSSTM")
-                    if result.splitlines()[-1] != "OK":
-                        raise ModemConnectionException("Error code response from modem, cannot continue")
+                        # And time is measured in 90ms intervals eg. 62b95972
+                        result = self._send_receive_messages("AT-MSSTM")
+                        if result.splitlines()[-1] != "OK":
+                            raise ModemConnectionException("Error code response from modem, cannot continue")
 
-                    result = self._re_msstm_response.match(result).group(1)
+                        result = self._re_msstm_response.match(result).group(1)
 
-                    now = timedelta(seconds=int(result, 16) / (1. / 0.09))
-                else:
-                    return None
-            except ModemConnectionException:
-                logging.exception("Cannot get Iridium time")
-                return False
-            except ValueError:
-                logging.exception("Cannot use value for Iridium time")
-                return False
-            except TypeError:
-                logging.exception("Cannot cast value for Iridium time")
-                return False
-            finally:
-                if locked:
-                    self.modem_lock.release()
-            return now + ep
+                        now = timedelta(seconds=int(result, 16) / (1. / 0.09))
+                    else:
+                        return None
+                except (ModemConnectionException, serial.SerialException, serial.SerialTimeoutException):
+                    logging.exception("Cannot get Iridium time")
+                    return False
+                except ValueError:
+                    logging.exception("Cannot use value for Iridium time")
+                    return False
+                except TypeError:
+                    logging.exception("Cannot cast value for Iridium time")
+                    return False
+                finally:
+                    if locked:
+                        self.modem_lock.release()
+                return now + ep
 
         def start(self):
             with self._thread_lock:
@@ -288,18 +289,19 @@ class ModemConnection(object):
                     rtscts=self.virtual,
                     dsrdtr=self.virtual
                 )
-                self._send_receive_messages("AT")
-                self._send_receive_messages("ATE0")
-                self._send_receive_messages("AT+SBDC")
             else:
                 if not self._data.is_open:
                     logging.info("Opening existing modem serial connection")
                     self._data.open()
-## TODO: Shared object now between threads, at startup, don't think this needs to be present
+                ## TODO: Shared object now between threads, at startup, don't think this needs to be present
                 else:
                     logging.warning("Modem appears to already be open, wasn't previously closed!?!")
 #                    raise ModemConnectionException(
 #                        "Modem appears to already be open, wasn't previously closed!?!")
+
+            self._send_receive_messages("AT")
+            self._send_receive_messages("ATE0\n")
+            self._send_receive_messages("AT+SBDC")
 
             if not self.rockblock:
                 reg_checks = 0
@@ -761,16 +763,20 @@ class SBDMessage(object):
         self._msg = msg
         self._warn = warning
         self._critical = critical
-
-        if include_date:
-            self._dt = datetime.utcnow()
-        else:
-            self._dt = None
+        self._include_dt = include_date
+        self._dt = datetime.utcnow()
 
     def get_message_text(self):
-        if self._dt:
+        if self._include_dt:
             return "{}:{}".format(self._dt.strftime("%d-%m-%Y %H:%M:%S"), self._msg[:1900])
         return "{}".format(self._msg)[:1920]
+
+    @property
+    def datetime(self):
+        return self._dt
+
+    def __lt__(self, other):
+        return self.datetime < other.datetime
 
 
 class ModemConnectionException(Exception):
@@ -790,37 +796,39 @@ class WakeupTask(CheckCommand):
         system_time_format = "%a %b %d %H:%M:%S %Z %Y"
         system_setformat = "%a %b %d %H:%M:%S UTC %Y"
         status = "ok - "
+        output = ""
+        change = ""
 
         dt = datetime.utcnow()
         output = "SysDT: {} ".format(dt.strftime("%d%m%Y %H%M%S"))
 
         if not ir_now:
             logging.warning("Unable to get Iridium time...")
-            return "critical - Unable to initiate Iridium: {}".format(ir_now)
-
-        if ir_now:
-            output += "IRDT: {}".format(ir_now.strftime("%d%m%Y %H%M%S"))
+            status = "critical - Unable to initiate Iridium to collect time"
         else:
-            status = "warning - "
-
-        if (dt - ir_now).total_seconds() > int(max_gap):
-            try:
-                rc = subprocess.call(shlex.split("date -s '{}'".format(
-                                     ir_now.strftime(system_setformat))))
-            except Exception:
-                logging.warning("Could not set system time to Iridium time")
-                status = "critical -"
-                change = "Cannot set SysDT"
+            if ir_now:
+                output += "IRDT: {}".format(ir_now.strftime("%d%m%Y %H%M%S"))
             else:
-                logging.info("Changed system time {} to {}".format(
-                    dt.strftime("%d-%m-%Y %H:%M:%S"),
-                    ir_now.strftime("%d-%m-%Y %H:%M:%S")
-                ))
-                change = "SysDT set to GPSDT"
-        else:
-            logging.info("Iridium time {} and system time {} within acceptable difference of {}".format(
-                ir_now.strftime("%d-%m-%Y %H:%M:%S"), dt.strftime("%d-%m-%Y %H:%M:%S"), max_gap))
-            change = "OK"
+                status = "warning - "
 
-        self._output = " ".join([status, output, change])
+            if (dt - ir_now).total_seconds() > int(max_gap):
+                try:
+                    rc = subprocess.call(shlex.split("date -s '{}'".format(
+                                         ir_now.strftime(system_setformat))))
+                except Exception:
+                    logging.warning("Could not set system time to Iridium time")
+                    status = "critical -"
+                    change = "Cannot set SysDT"
+                else:
+                    logging.info("Changed system time {} to {}".format(
+                        dt.strftime("%d-%m-%Y %H:%M:%S"),
+                        ir_now.strftime("%d-%m-%Y %H:%M:%S")
+                    ))
+                    change = "SysDT set to GPSDT"
+            else:
+                logging.info("Iridium time {} and system time {} within acceptable difference of {}".format(
+                    ir_now.strftime("%d-%m-%Y %H:%M:%S"), dt.strftime("%d-%m-%Y %H:%M:%S"), max_gap))
+                change = "OK"
+
+        self._output = (" ".join([status, output, change])).strip()
         return self._process_cmd_output(self._output)

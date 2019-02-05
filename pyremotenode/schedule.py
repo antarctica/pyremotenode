@@ -319,7 +319,7 @@ class Scheduler(object):
             else:
                 logging.warning("{} will only be run at startup".format(action['id']))
 
-        if 'waiton' in action:
+        if job and 'waiton' in action:
             # TODO: We can add further parameters for checking the event, at the mo we just care that it's run
             def resume_job(evt):
                 if (evt.job_id == action['waiton'] or evt.job_id == "onboot_{}".format(action['waiton']))\
