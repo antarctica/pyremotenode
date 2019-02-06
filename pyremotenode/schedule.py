@@ -254,6 +254,12 @@ class Scheduler(object):
         obj = self._schedule_task_instances[action['id']]
         job = None
 
+        misfire_grace_time=None
+
+        if 'misfire_secs' in action:
+            logging.info("Grace time on job ID {} will be {} seconds".format(action['id'], action['misfire_secs']))
+            misfire_grace_time=int(action['misfire_secs'])
+
         if 'onboot' in action:
             job = self.schedule_immediate_action(obj,
                                                  "onboot_{}".format(action['id']),
@@ -268,6 +274,7 @@ class Scheduler(object):
                                    minutes=int(action['interval']),
                                    coalesce=True,
                                    max_instances=1,
+                                   misfire_grace_time=misfire_grace_time,
                                    kwargs=kwargs)
         elif 'interval_secs' in action:
             logging.debug("Scheduling seconds based interval job")
@@ -278,6 +285,7 @@ class Scheduler(object):
                                    seconds=int(action['interval_secs']),
                                    coalesce=True,
                                    max_instances=1,
+                                   misfire_grace_time=misfire_grace_time,
                                    kwargs=kwargs)
         elif 'date' in action or 'time' in action:
             logging.debug("Scheduling standard job")
@@ -299,6 +307,7 @@ class Scheduler(object):
                                        coalesce=True,
                                        max_instances=1,
                                        run_date=dt,
+                                       misfire_grace_time=misfire_grace_time,
                                        kwargs=kwargs)
         elif any(k in cron_args for k in action):
             logging.debug("Scheduling cron style job")
@@ -310,6 +319,7 @@ class Scheduler(object):
                                    trigger='cron',
                                    coalesce=True,
                                    max_instances=1,
+                                   misfire_grace_time=misfire_grace_time,
                                    kwargs=kwargs,
                                    **job_args)
         else:

@@ -3,9 +3,10 @@ import os
 import re
 import shlex
 import subprocess as sp
+import time
 
 from datetime import datetime, timedelta
-from pyremotenode.tasks import BaseTask
+from pyremotenode.tasks import BaseTask, ModemConnection
 
 
 class Sleep(BaseTask):
@@ -18,6 +19,7 @@ class Sleep(BaseTask):
     def default_action(self,
                        until_date="today",
                        until_time="0900",
+                       modem_aware=False,
                        **kwargs):
         logging.debug("Running default action for Sleep")
         dt = None
@@ -36,6 +38,17 @@ class Sleep(BaseTask):
             raise TypeError("Error in type passed as argument {}".format(type(until_date)))
 
         tm = datetime.strptime(until_time, "%H%M").time()
+
+        modem_aware = bool(modem_aware)
+
+        if modem_aware:
+            logging.info("This sleep is modem aware and will wait until the task is finished")
+            modem = ModemConnection()
+            qsize = modem.message_queue.qsize()
+            while qsize > 0:
+                logging.warning("Deferring sleep for a minute to process queue size: {}".format(qsize))
+                time.sleep(60)
+                qsize = modem.message_queue.qsize()
 
         seconds = (datetime.combine(dt, tm) - datetime.utcnow()).total_seconds()
         # Evaluate minimum seconds, push to tomorrow if we've gone past the time today
