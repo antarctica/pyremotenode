@@ -110,7 +110,7 @@ class SendLoHBaselines(BaseTask):
                 self._proclist[filename] = dt
 
             aggregates = {}
-            # TODO: Aggregate
+
             for bs_pair in data.keys():
                 bs_data = []
 

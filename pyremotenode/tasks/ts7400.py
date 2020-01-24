@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import shlex
+import struct
 import subprocess as sp
 import time
 
@@ -20,6 +21,7 @@ class Sleep(BaseTask):
                        until_date="today",
                        until_time="0900",
                        modem_aware=False,
+                       record_queue=None,
                        **kwargs):
         logging.debug("Running default action for Sleep")
         dt = None
@@ -49,6 +51,23 @@ class Sleep(BaseTask):
                 logging.warning("Deferring sleep for a minute to process queue size: {}".format(qsize))
                 time.sleep(60)
                 qsize = modem.message_queue.qsize()
+
+        if record_queue:
+            logging.debug("This sleep will record the SBD queue size at {}".format(record_queue))
+            qsize = modem.message_queue.qsize()
+            try:
+                # If the queue size this time is > 0, accumulate in the file. If not, ensure the file is zero on write
+                if os.path.exists(record_queue) and qsize > 0:
+                    with open(record_queue, "rb") as fh:
+                        prev_queue = struct.unpack("I", fh.read(4))[0]
+                else:
+                    prev_queue = 0
+
+                with open(record_queue, "wb", buffering=0) as fh:
+                    fh.write(struct.pack("I", qsize + prev_queue))
+                    fh.flush()
+            except (IOError, OSError):
+                logging.exception("Could not write queue size before sleeping")
 
         seconds = (datetime.combine(dt, tm) - datetime.utcnow()).total_seconds()
         # Evaluate minimum seconds, push to tomorrow if we've gone past the time today
