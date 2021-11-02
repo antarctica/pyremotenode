@@ -54,6 +54,7 @@ class Sleep(BaseTask):
 
         if record_queue:
             logging.debug("This sleep will record the SBD queue size at {}".format(record_queue))
+            modem = ModemConnection()
             qsize = modem.message_queue.qsize()
             try:
                 # If the queue size this time is > 0, accumulate in the file. If not, ensure the file is zero on write

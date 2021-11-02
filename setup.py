@@ -14,13 +14,15 @@ setup(
         "run_pyremotenode",
     ],
     include_package_data = True,
-    version = '0.4.0a0',
+    version = '0.4.0a2',
     author = 'James Byrne',
-    author_email = 'zdm@bas.ac.uk',
-    url = 'http://www.antarctica.ac.uk',
+    author_email = 'jambyr@bas.ac.uk',
+    url = 'http://www.github.com/jimcircadian/pyremotenode',
     install_requires=[
-        "apscheduler",
+        # TODO: need to sort this out, comes from jimcircadian/apscheduler for python3.2 compatibility
+        "apscheduler==3.0.8",
         "pyserial",
+        "pytz",
         "xmodem",
         "pynmea2"
     ]

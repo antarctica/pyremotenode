@@ -92,7 +92,7 @@ class ListCommand(Command):
     def _process_cmd_output(self, output):
         filelist = []
 
-        for f in output.split(os.linesep):
+        for f in [l.strip() for l in output.split(os.linesep) if len(l)]:
             if os.path.exists(f) and os.path.isfile(f):
                 logging.debug("Listed {}".format(f))
                 filelist.append(f)

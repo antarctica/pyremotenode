@@ -14,20 +14,33 @@ if __name__ == '__main__':
     a = argparse.ArgumentParser()
     a.add_argument("config", help="Configuration to use for running remote node")
     # TODO: Naming of service as a parameter...
-    a.add_argument("--start-when-fail", "-s", help="Start even if initial monitor checks fail",
+    a.add_argument("--log-dir", "-l", help="Log directory",
+                   default=os.path.join(os.sep,
+                                        "data",
+                                        "pyremotenode",
+                                        "logs"))
+    a.add_argument("--start-when-fail", "-s",
+                   help="Start even if initial monitor checks fail",
                    action="store_true", default=False)
-    a.add_argument("--pidfile", "-p", help="PID file to manage for service operations",
-                   default=os.path.join(os.sep, "var", "run", "{0}.pid".format(__name__)))
+    a.add_argument("--pidfile", "-p",
+                   help="PID file to manage for service operations",
+                   default=os.path.join(os.sep,
+                                        "var",
+                                        "run",
+                                        "{0}.pid".format(__name__)))
     a.add_argument("--no-pidfile", "-np", help="Don't check or create PID file",
                    default=False, action="store_true")
-    a.add_argument("--no-daemon", "-n", help="Do not daemon", default=False, action="store_true")
-    a.add_argument("--verbose", "-v", help="Debugging information", default=False, action="store_true")
+    a.add_argument("--no-daemon", "-n", help="Do not daemon",
+                   default=False, action="store_true")
+    a.add_argument("--verbose", "-v", help="Debugging information",
+                   default=False, action="store_true")
     args = a.parse_args()
 
     if not args.no_daemon:
         background_fork()
 
     setup_logging("{}".format(os.path.basename(args.config)),
+                  logdir=args.log_dir,
                   verbose=args.verbose)
     
     Configuration.check_file(args.config)

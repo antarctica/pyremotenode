@@ -89,7 +89,9 @@ class Scheduler(object):
 
         :return:    None
         """
-        hk_sleep = int(self.settings['housekeeping_sleep'])
+        hk_sleep = 60 if "housekeeping_sleeep" not in self.settings else \
+            int(self.settings['housekeeping_sleep'])
+
         logging.info("Starting scheduler")
         logging.debug("Housekeeping at {} second intervals".format(hk_sleep))
 
@@ -142,7 +144,8 @@ class Scheduler(object):
 
     def schedule_immediate_action(self, obj, job_id, args):
         if obj and job_id:
-            # NOTE: 3.0.6 suffers from apscheduler issue #133 if system datetime is not UTC
+            # NOTE: 3.0.6 suffers from apscheduler issue #133 if
+            # system datetime is not UTC
             return self._schedule.add_job(obj,
                                           id=job_id,
                                           coalesce=False,
@@ -329,6 +332,7 @@ class Scheduler(object):
             else:
                 logging.warning("{} will only be run at startup".format(action['id']))
 
+        # TODO: Waiton is not working for script executions as the schedule job is not active during execution!
         if job and 'waiton' in action:
             # TODO: We can add further parameters for checking the event, at the mo we just care that it's run
             def resume_job(evt):
@@ -403,6 +407,7 @@ class TaskInstanceFactory(object):
     def get_item(cls, id, task, scheduler=None, **kwargs):
         klass_name = TaskInstanceFactory.get_klass_name(task)
 
+        # TODO: add possibility for plugins via broad include
         if hasattr(pyremotenode.tasks, klass_name):
             # TODO: warning and critical object creation or configuration supply
             return getattr(pyremotenode.tasks, klass_name)(

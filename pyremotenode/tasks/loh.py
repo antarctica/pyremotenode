@@ -64,8 +64,6 @@ class SendLoHBaselines(BaseTask):
 
         self._proclist = {fn: fn_dt for fn, fn_dt in self._proclist.items() if fn_dt >= min_dt}
 
-        # TODO: Ideally we'd make sure that minimise.sh wasn't still running
-
         while current_day <= days_behind:
             logging.info("Processing files from {} days ago".format(current_day))
 

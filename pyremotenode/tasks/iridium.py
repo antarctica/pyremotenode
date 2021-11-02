@@ -165,6 +165,8 @@ class ModemConnection(object):
             # MO dial up vars
             self.dialup_number = cfg['ModemConnection']['dialup_number'] \
                 if 'dialup_number' in cfg['ModemConnection'] else None
+            self._call_timeout = cfg['ModemConnection']['call_timeout'] \
+                if "call_timeout" in cfg['ModemConnection'] else 120
 
             self._lineend = "\r"
             if self.virtual or self.rockblock:
@@ -350,8 +352,8 @@ class ModemConnection(object):
                     if msg[0] == self._priority_sbd_mo:
                         self._process_sbd_message(msg[1])
                     elif msg[0] == self._priority_file_mo:
-                        # TODO: We need to batch file transfers together onto a single
-                        # long running call
+                        # TODO: We need to batch file transfers together into
+                        #  a single long running call
                         self._process_file_message(msg[1])
                     else:
                         raise ModemConnectionException("Invalid message type submitted {}".format(msg[0]))
@@ -373,34 +375,43 @@ class ModemConnection(object):
             def _callback(total_packets, success_count, error_count):
                 logging.debug("{} packets, {} success, {} errors".format(total_packets, success_count, error_count))
                 logging.debug("CD STATE: {}".format(self._data.cd))
+
                 if error_count > self._dataxfer_errors:
                     logging.warning("Increase in error count")
                     self._dataxfer_errors = error_count
-#                # TODO: NAKs and error recall thresholds need to be configurable
-#                if error_count > 0 and error_count % 3 == 0:
-#                    logging.info("Third error response, re-establishing uplink")
+                # TODO: NAKs and error recall thresholds need to be configurable
+                # if error_count > 0 and error_count % 3 == 0:
+                #     logging.info("Third error response, re-establishing
+                #     uplink")
                     try:
                         self._end_data_call()
                     except ModemConnectionException as e:
                         logging.warning("Unable to cleanly kill the call, will attempt a startup anyway: {}".format(e))
                     finally:
-                        # If this doesn't work, we're likely fucked and might as well have the whole process restart
-                        # again
+                        # If this doesn't work, we're likely down and might as
+                        # well have the whole process restart again
                         self._start_data_call()
 
             def _getc(size, timeout=self._data.timeout):
                 self._data.timeout = timeout
                 read = self._data.read(size=size) or None
+                logging.debug("_getc read {} bytes from data line".format(
+                    len(read)
+                ))
                 return read
 
             def _putc(data, timeout=self._data.write_timeout):
                 self._data.write_timeout = timeout
+                logging.debug("_putc wrote {} bytes to data line".format(
+                    len(data)
+                ))
                 size = self._data.write(data=data)
                 return size
 
             # TODO: Catch errors and hangup the call!
             # TODO: Call thread needs to be separate to maintain uplink
             if self._start_data_call():
+                # FIXME 2021: Try without preamble, make this optional
                 self._send_filename(filename)
 
                 xfer = xmodem.XMODEM(_getc, _putc)
@@ -415,24 +426,32 @@ class ModemConnection(object):
 
         def _send_filename(self, filename):
             buffer = bytearray()
+            res = None
+
+            while res.splitlines()[-1] != "A":
+                res = self._send_receive_messages("@")
 
             res = self._send_receive_messages("FILENAME")
             # TODO: abstract the responses from being always a split and subscript
             if res.splitlines()[-1] != "GOFORIT":
                 raise ModemConnectionException("Required response for FILENAME command not received")
 
-            # We can only have two byte lengths, and we don't escape the two markers characters
-            # since we're using the length marker with otherwise fixed fields. We just use 0x1b
-            # as validation of the last byte of the message
+            # We can only have two byte lengths, and we don't escape the two
+            # markers characters since we're using the length marker with
+            # otherwise fixed fields. We just use 0x1b as validation of the
+            # last byte of the message
             bfile = os.path.basename(filename).encode("latin-1")[:255]
             file_length = os.stat(filename)[stat.ST_SIZE]
             length = len(bfile)
             buffer += struct.pack("BB", 0x1a, length)
             buffer += struct.pack("{}s".format(length), bfile)
             buffer += struct.pack("<i", file_length)
+
             # TODO: We should ideally be implementing the SAFs chunking functionality
+
             buffer += struct.pack("<ii", 1, 1)
-            buffer += struct.pack("qB", binascii.crc32(bfile) & 0xffffffff, 0x1b)
+            buffer += struct.pack("<iB", binascii.crc32(bfile) & 0xffffffff,
+                                  0x1b)
 
             res = self._send_receive_messages(buffer, raw=True)
             if res.splitlines()[-1] != "NAMERECV":
@@ -443,7 +462,10 @@ class ModemConnection(object):
                 logging.warning("No dialup number configured, will drop this message")
                 return False
 
-            response = self._send_receive_messages("ATDT{}".format(self.dialup_number))
+            response = self._send_receive_messages(
+                "ATDT{}".format(self.dialup_number),
+                timeout_override=self._call_timeout,
+            )
             if not response.splitlines()[-1].startswith("CONNECT "):
                 raise ModemConnectionException("Error opening call: {}".format(response))
             return True
@@ -620,6 +642,7 @@ class ModemConnection(object):
                 start = datetime.utcnow()
                 if not dont_decode:
                     logging.debug("Reply received: '{}'".format(reply.decode().strip()))
+                    modem_response = True
 
                 cmd_match = self._re_modem_resp.search(reply.strip())
                 if cmd_match:

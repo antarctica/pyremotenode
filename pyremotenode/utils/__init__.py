@@ -19,6 +19,10 @@ def setup_logging(name='',
     if verbose:
         level = logging.DEBUG
 
+    if not os.path.exists(logdir):
+        raise RuntimeError("{} must exist before running PyRemoteNode".
+                           format(logdir))
+
     logging.basicConfig(
         level=level,
         format=logformat,
