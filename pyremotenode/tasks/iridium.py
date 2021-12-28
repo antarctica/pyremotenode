@@ -105,7 +105,7 @@ class ModemConnection(object):
                                         |READY
                                         |GOFORIT
                                         |NAMERECV
-                                        |CONNECT(?: \d{3,5})?)
+                                        |CONNECT(?:\s\d+)?)
                                         [\r\n]*$""", re.X)
 
         _priority_sbd_mo = 1
@@ -428,7 +428,7 @@ class ModemConnection(object):
             buffer = bytearray()
             res = None
 
-            while res.splitlines()[-1] != "A":
+            while not res or res.splitlines()[-1] != "A":
                 res = self._send_receive_messages("@")
 
             res = self._send_receive_messages("FILENAME")
@@ -445,12 +445,11 @@ class ModemConnection(object):
             length = len(bfile)
             buffer += struct.pack("BB", 0x1a, length)
             buffer += struct.pack("{}s".format(length), bfile)
-            buffer += struct.pack("<i", file_length)
-
-            # TODO: We should ideally be implementing the SAFs chunking functionality
-
-            buffer += struct.pack("<ii", 1, 1)
-            buffer += struct.pack("<iB", binascii.crc32(bfile) & 0xffffffff,
+            buffer += struct.pack("i", file_length)
+            buffer += struct.pack("i", 1)
+            buffer += struct.pack("i", 1)
+            buffer += struct.pack("iB",
+                                  binascii.crc32(bfile) & 0xffff,
                                   0x1b)
 
             res = self._send_receive_messages(buffer, raw=True)
@@ -599,8 +598,6 @@ class ModemConnection(object):
             """
             if not self._data.isOpen():
                 raise ModemConnectionException('Cannot send message; data port is not open')
-            self._data.flushInput()
-            self._data.flushOutput()
 
             if not raw:
                 self._data.write("{}{}".format(message.strip(), self._lineend).encode("latin-1"))
@@ -623,7 +620,7 @@ class ModemConnection(object):
 
             while not modem_response:
                 tm.sleep(0.1)
-                reply += self._data.read_all()
+                reply += self._data.read(self._data.in_waiting or 1)
                 bytes_read += len(reply)
 
                 duration = (datetime.utcnow() - start).total_seconds()
@@ -635,7 +632,7 @@ class ModemConnection(object):
                         # It's up to the caller to handle this scenario, just give back what's available...
                         raise ModemConnectionException("Response timeout from serial line...")
                     else:
-                        logging.debug("Waiting for response...")
+                        #logging.debug("Waiting for response...")
                         tm.sleep(self.msg_wait_period)
                         continue
 
