@@ -4,6 +4,7 @@ __pycache__
 /archive/
 /build/
 /dist/
+/inbox/
 /logs/
 /messages/
 /output/
