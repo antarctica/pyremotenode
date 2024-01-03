@@ -249,7 +249,8 @@ class Scheduler(object):
     def _plan_schedule_task(self, until, action):
         logging.debug("Got item {0}".format(action))
         timings = []
-        cron_args = ('year','minute','day','week','day_of_week','hour','minute','second','start_date','end_date')
+        cron_args = ('year', 'month', 'day', 'week', 'day_of_week', 'hour',
+                     'minute', 'second', 'start_date', 'end_date')
 
         # NOTE: Copy this before changing, or when passing!
         kwargs = action['args']
@@ -257,7 +258,7 @@ class Scheduler(object):
         obj = self._schedule_task_instances[action['id']]
         job = None
 
-        misfire_grace_time=None
+        misfire_grace_time = None
 
         if 'misfire_secs' in action:
             logging.info("Grace time on job ID {} will be {} seconds".format(action['id'], action['misfire_secs']))
