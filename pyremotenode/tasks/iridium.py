@@ -204,6 +204,9 @@ class ModemConnection(object):
                 except (ModemConnectionException, serial.SerialException, serial.SerialTimeoutException):
                     logging.exception("Cannot get Iridium time")
                     return False
+                except IndexError:
+                    logging.exception("Something likely went wrong initialising the modem")
+                    return False
                 except ValueError:
                     logging.exception("Cannot use value for Iridium time")
                     return False
