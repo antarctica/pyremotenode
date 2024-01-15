@@ -601,6 +601,8 @@ class ModemConnection(object):
             """
             if not self._data.isOpen():
                 raise ModemConnectionException('Cannot send message; data port is not open')
+            self._data.flushInput()
+            self._data.flushOutput()
 
             if not raw:
                 self._data.write("{}{}".format(message.strip(), self._lineend).encode("latin-1"))
@@ -623,7 +625,7 @@ class ModemConnection(object):
 
             while not modem_response:
                 tm.sleep(0.1)
-                reply += self._data.read(self._data.in_waiting or 1)
+                reply += self._data.read_all()
                 bytes_read += len(reply)
 
                 duration = (datetime.utcnow() - start).total_seconds()
@@ -642,7 +644,6 @@ class ModemConnection(object):
                 start = datetime.utcnow()
                 if not dont_decode:
                     logging.debug("Reply received: '{}'".format(reply.decode().strip()))
-                    modem_response = True
 
                 cmd_match = self._re_modem_resp.search(reply.strip())
                 if cmd_match:

@@ -89,7 +89,7 @@ class Scheduler(object):
 
         :return:    None
         """
-        hk_sleep = 60 if "housekeeping_sleeep" not in self.settings else \
+        hk_sleep = 60 if "housekeeping_sleep" not in self.settings else \
             int(self.settings['housekeeping_sleep'])
 
         logging.info("Starting scheduler")
@@ -150,7 +150,7 @@ class Scheduler(object):
                                           id=job_id,
                                           coalesce=False,
                                           max_instances=1,
-                                          misfire_grace_time=60,
+                                          misfire_grace_time=None,
                                           kwargs=args)
 
     @property
@@ -257,16 +257,16 @@ class Scheduler(object):
         obj = self._schedule_task_instances[action['id']]
         job = None
 
-        misfire_grace_time=None
+        misfire_grace_time = None
 
         if 'misfire_secs' in action:
             logging.info("Grace time on job ID {} will be {} seconds".format(action['id'], action['misfire_secs']))
-            misfire_grace_time=int(action['misfire_secs'])
+            misfire_grace_time = int(action['misfire_secs'])
 
         if 'onboot' in action:
             job = self.schedule_immediate_action(obj,
                                                  "onboot_{}".format(action['id']),
-                                                    kwargs)
+                                                 kwargs)
 
         if 'interval' in action:
             logging.debug("Scheduling interval based job")
