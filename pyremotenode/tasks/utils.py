@@ -57,6 +57,7 @@ class RunCommand(Command):
         Command.__init__(self, *args, **kwargs)
 
     def _process_cmd_output(self, output):
+        self._output = output
         return self.OK
 
 
