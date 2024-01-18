@@ -63,7 +63,7 @@ class BaseTask(object):
     @property
     def binary(self):
         return self._binary
-    
+
     # TODO: I don't really like this, it mixes messaging and state flags - change sensibly
     @property
     def state(self):

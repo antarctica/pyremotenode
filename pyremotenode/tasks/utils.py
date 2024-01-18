@@ -20,7 +20,7 @@ class Command(BaseTask):
         self._output = None
 
         for k, v in kwargs.items():
-            if k in ["id", "scheduler"]:
+            if k in ["id", "scheduler", "binary"]:
                 continue
             self._args.append("--{0}".format(k))
             self._args.append(v)
