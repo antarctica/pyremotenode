@@ -50,6 +50,10 @@ class Command(BaseTask):
         raise NotImplementedError
 
     @property
+    def binary(self):
+        return self._binary
+
+    @property
     def message(self):
         return self._output
 

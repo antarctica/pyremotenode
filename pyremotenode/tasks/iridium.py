@@ -497,7 +497,7 @@ class ModemConnection(object):
         # TODO: All this logic needs a rewrite, it's too dependent on MO message initiation
         def _process_sbd_message(self, msg=None):
             if msg:
-                text = msg.get_message_text().replace("\n", " ")
+                text = msg.get_message_text()# .replace("\n", " ")
 
                 response = self._send_receive_messages("AT+SBDWB={}".format(len(text)))
                 if response.splitlines()[-1] != "READY":
@@ -766,12 +766,19 @@ class SBDSender(BaseSender):
     def default_action(self, invoking_task, **kwargs):
         logging.debug("Running default action for SBDSender")
 
-        message_text = str(invoking_task.message)
-        warning = True if message_text.find("warning") >= 0 else False
-        critical = True if message_text.find("critical") >= 0 else False
+        if not invoking_task.binary:
+            message_text = str(invoking_task.message)
+            warning = True if message_text.find("warning") >= 0 else False
+            critical = True if message_text.find("critical") >= 0 else False
+        else:
+            message_text = invoking_task.message
+            warning = False
+            critical = False
 
         self.modem.send_sbd(SBDMessage(
             message_text,
+            binary=invoking_task.binary,
+            include_date=not invoking_task.binary,
             warning=warning,
             critical=critical
         ))
@@ -783,14 +790,19 @@ class SBDSender(BaseSender):
 
 
 class SBDMessage(object):
-    def __init__(self, msg, include_date=True, warning=False, critical=False):
+    def __init__(self, msg, include_date=True, warning=False, critical=False, binary=False):
         self._msg = msg
         self._warn = warning
         self._critical = critical
         self._include_dt = include_date
         self._dt = datetime.utcnow()
+        self._binary = binary
 
     def get_message_text(self):
+        if self._binary:
+            logging.info("Returning binary message: {} bytes".format(len(self._msg)))
+            return self._msg[:1920]
+
         if self._include_dt:
             return "{}:{}".format(self._dt.strftime("%d-%m-%Y %H:%M:%S"), self._msg[:1900])
         return "{}".format(self._msg)[:1920]
