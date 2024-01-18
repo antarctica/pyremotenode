@@ -17,11 +17,13 @@ class BaseTask(object):
     def __init__(self, id,
                  scheduler=None,
                  not_due=None,
+                 binary=False,
                  **kwargs):
         self._sched = scheduler
         self._id = id
         self._state = None
         self._last_state = self._state
+        self._binary = binary
         # TODO: Currently not used yet
         self._ready = True
 
@@ -58,6 +60,10 @@ class BaseTask(object):
     def default_action(self, **kwargs):
         raise TaskException("There is no default action defined for {}".format(self.__name__))
 
+    @property
+    def binary(self):
+        return self._binary
+    
     # TODO: I don't really like this, it mixes messaging and state flags - change sensibly
     @property
     def state(self):

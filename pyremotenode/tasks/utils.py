@@ -12,13 +12,12 @@ RE_OUTPUT = re.compile(r'^.*(ok|warning|critical|invalid)\s*\-.+', flags=re.IGNO
 
 
 class Command(BaseTask):
-    def __init__(self, path, name=None, binary=False, **kwargs):
+    def __init__(self, path, name=None, **kwargs):
         BaseTask.__init__(self, **kwargs)
         self._name = name if name else path
         self._args = [path]
         self._proc = None
         self._output = None
-        self._binary = binary
 
         for k, v in kwargs.items():
             if k in ["id", "scheduler"]:
@@ -34,24 +33,20 @@ class Command(BaseTask):
         try:
             ret = subprocess.check_output(
                 args=shlex.split(" ".join(self._args)),
-                universal_newlines=not self._binary)
+                universal_newlines=not self.binary)
         except subprocess.CalledProcessError as e:
-            if not self._binary:
+            if not self.binary:
                 logging.warning("Got error code {0} and message: {1}".format(e.returncode, e.output))
             # TODO: Evaluate how this will be handled in the end
             raise TaskException("The called command failed with an out of bound return code...")
 
-        if not self._binary:
+        if not self.binary:
             logging.info("Command return output: {0}".format(ret))
 
         return self._process_cmd_output(ret)
 
     def _process_cmd_output(self, ret):
         raise NotImplementedError
-
-    @property
-    def binary(self):
-        return self._binary
 
     @property
     def message(self):
