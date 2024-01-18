@@ -503,7 +503,7 @@ class ModemConnection(object):
                 if response.splitlines()[-1] != "READY":
                     raise ModemConnectionException("Error preparing for binary message: {}".format(response))
 
-                payload = text.encode()
+                payload = text.encode() if not msg.binary else text
                 payload += ModemConnection.calculate_sbd_checksum(payload)
                 response = self._send_receive_messages(payload, raw=True)
 
@@ -806,6 +806,10 @@ class SBDMessage(object):
         if self._include_dt:
             return "{}:{}".format(self._dt.strftime("%d-%m-%Y %H:%M:%S"), self._msg[:1900])
         return "{}".format(self._msg)[:1920]
+
+    @property
+    def binary(self):
+        return self._binary
 
     @property
     def datetime(self):
