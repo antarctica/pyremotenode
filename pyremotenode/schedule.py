@@ -150,7 +150,7 @@ class Scheduler(object):
                                           id=job_id,
                                           coalesce=False,
                                           max_instances=1,
-                                          misfire_grace_time=None,
+                                          misfire_grace_time=1200,
                                           kwargs=args)
 
     @property
