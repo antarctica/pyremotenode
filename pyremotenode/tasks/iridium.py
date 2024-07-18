@@ -243,7 +243,7 @@ class ModemConnection(object):
 
                             if self._signal_check():
                                 num = self._process_outstanding_messages()
-                                logging.info("Processed {} outgoing messages".format(num))
+                                logging.info("Processed {} outgoing messages".format(num if num is not None else 0))
                             else:
                                 logging.warning("Not enough signal to perform activities")
                         logging.info("Reached end of modem usage for this iteration...")

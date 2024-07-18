@@ -95,6 +95,3 @@ class Configuration(object):
             logging.error(error)
             raise OSError(error)
         return path
-
-
-
