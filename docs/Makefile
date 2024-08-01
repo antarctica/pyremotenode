@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = python -msphinx
-SPHINXPROJ    = icenet
+SPHINXPROJ    = pyremotenode
 SOURCEDIR     = .
 BUILDDIR      = _build
 
