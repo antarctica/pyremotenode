@@ -4,7 +4,7 @@ import subprocess
 
 from datetime import datetime
 
-from pyremotenode.comms.iridium import ModemConnection
+from pyremotenode.comms.base import ModemConnection
 from pyremotenode.tasks import BaseTask
 from pyremotenode.tasks.utils import CheckCommand
 
@@ -112,7 +112,7 @@ class WakeupTask(CheckCommand):
         self.modem = ModemConnection()
 
     def default_action(self, max_gap, **kwargs):
-        ir_now = self.modem.get_iridium_system_time()
+        ir_now = self.modem.get_system_time()
 
         system_time_format = "%a %b %d %H:%M:%S %Z %Y"
         system_setformat = "%a %b %d %H:%M:%S UTC %Y"

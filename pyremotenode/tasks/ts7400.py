@@ -8,7 +8,7 @@ import time
 
 from datetime import datetime, timedelta
 from pyremotenode.tasks import BaseTask
-from pyremotenode.comms.iridium import ModemConnection
+from pyremotenode.comms.base import ModemConnection
 
 
 class Sleep(BaseTask):
