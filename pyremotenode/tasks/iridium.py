@@ -4,7 +4,8 @@ import subprocess
 
 from datetime import datetime
 
-from pyremotenode.comms.base import ModemConnection
+import pyremotenode.comms.iridium
+from pyremotenode.comms.base import ModemConnection, ModemConnectionException
 from pyremotenode.tasks import BaseTask
 from pyremotenode.tasks.utils import CheckCommand
 
@@ -12,10 +13,15 @@ from pyremotenode.tasks.utils import CheckCommand
 class BaseSender(BaseTask):
     def __init__(self, **kwargs):
         BaseTask.__init__(self, **kwargs)
-        self.modem = ModemConnection()
+        self._modem = ModemConnection()
 
     def default_action(self, **kwargs):
         raise NotImplementedError
+
+
+    @property
+    def modem(self):
+        return self._modem
 
 
 class FileSender(BaseSender):
@@ -40,9 +46,10 @@ class FileSender(BaseSender):
         self.modem.start()
 
 
-class SBDSender(BaseSender):
+class MessageSender(BaseSender):
     def __init__(self, **kwargs):
-        BaseSender.__init__(self, **kwargs)
+        super().__init__(**kwargs)
+        self._message_length = None
 
     def default_action(self, invoking_task, **kwargs):
         logging.debug("Running default action for SBDSender")
@@ -56,37 +63,63 @@ class SBDSender(BaseSender):
             warning = False
             critical = False
 
-        self.modem.send_sbd(SBDMessage(
+        self.modem.send_message(Message(
             message_text,
             binary=invoking_task.binary,
             include_date=not invoking_task.binary,
             warning=warning,
-            critical=critical
+            critical=critical,
+            max_length=self._message_length
         ))
         self.modem.start()
 
     def send_message(self, message, include_date=True):
-        self.modem.send_sbd(SBDMessage(message, include_date=include_date))
+        self.modem.send_message(Message(message, include_date=include_date))
         self.modem.start()
 
+    @property
+    def message_length(self):
+        return self._message_length
 
-class SBDMessage(object):
-    def __init__(self, msg, include_date=True, warning=False, critical=False, binary=False):
+
+class IMTSender(MessageSender):
+    pass
+
+
+class SBDSender(MessageSender):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        if not isinstance(self.modem, pyremotenode.comms.iridium.RudicsConnection):
+            raise ModemConnectionException("Wrong type of modem connection")
+        self._message_length = 1920 if not self.modem.rockblock else 340
+
+
+class Message(object):
+    def __init__(self,
+                 msg,
+                 include_date=True,
+                 warning=False,
+                 critical=False,
+                 binary=False,
+                 max_length=None):
         self._msg = msg
         self._warn = warning
         self._critical = critical
         self._include_dt = include_date
         self._dt = datetime.utcnow()
         self._binary = binary
+        self._max_length = max_length
 
     def get_message_text(self):
         if self._binary:
             logging.info("Returning binary message: {} bytes".format(len(self._msg)))
-            return self._msg[:1920]
+            return self._msg if self._max_length is None else self._msg[:self._max_length]
 
         if self._include_dt:
-            return "{}:{}".format(self._dt.strftime("%d-%m-%Y %H:%M:%S"), self._msg[:1900])
-        return "{}".format(self._msg)[:1920]
+            return "{}:{}".format(self._dt.strftime("%d-%m-%Y %H:%M:%S"),
+                                  self._msg if self._max_length is None else self._msg[:self._max_length - 20])
+        return self._msg if self._max_length is None else self._msg[:self._max_length]
 
     @property
     def binary(self):
@@ -98,12 +131,6 @@ class SBDMessage(object):
 
     def __lt__(self, other):
         return self.datetime < other.datetime
-
-
-class ModemConnectionException(Exception):
-    pass
-
-# ----------------------------
 
 
 class WakeupTask(CheckCommand):

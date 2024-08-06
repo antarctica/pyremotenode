@@ -16,8 +16,6 @@ from pyremotenode.utils.config import Configuration
 class MessageProcessor(object):
     @staticmethod
     def ingest(scheduler):
-        cfg = Configuration().config
-
         # TODO: currently available commands, ideally the messageprocessor should gain a list of messages from a
         # pyremotenode.messages factory and individually process message headers against their abstract .header_re()
         # method
