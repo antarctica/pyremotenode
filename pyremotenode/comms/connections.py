@@ -231,6 +231,7 @@ class BaseConnection(metaclass=ABCMeta):
 
         msg_dt = datetime.utcnow().strftime("%d%m%Y%H%M%S")
         msg_path = self.mt_destination if valid else os.path.join(self.mt_destination, "invalid")
+        os.makedirs(msg_path, exist_ok=True)
         msg_filename = os.path.join(
             msg_path,
             "{}_{}.{}".format(recv_msg_id, msg_dt, "msg" if valid else "bak"))

@@ -515,14 +515,14 @@ class CertusConnection(BaseConnection):
                             "Could not decompose the values from the incoming SBD message: {}".format(e.message))
 
                     self.output_recv_message(mt_msg_id,
-                                             mt_msg_len,
+                                             mt_msg_len - 2,  # The checksum is included in the received value
                                              message,
                                              calcd_chksum,
                                              recv_chksum)
+                    response = self.modem_command("AT+IMTA={}".format(mt_msg_id))
+                    if response.splitlines()[-1] == "OK":
+                        logging.info("Acknowledged IMT message ID {}".format(mt_msg_id))
 
-        response = self.modem_command("AT+IMTC2")
-        if response.splitlines()[-1] == "OK":
-            logging.debug("MO buffer cleared")
         return True
 
     def process_transfer(self, filename):
