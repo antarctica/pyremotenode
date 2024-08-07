@@ -51,15 +51,12 @@ class BaseConnection(metaclass=ABCMeta):
         self.serial_port = cfg['ModemConnection']['serial_port']
         self.serial_timeout = cfg['ModemConnection']['serial_timeout']
         self.serial_baud = cfg['ModemConnection']['serial_baud']
-
-        self._modem_power = cfg['ModemConnection']['modem_power_dio'] \
-            if 'modem_power_dio' in cfg['ModemConnection'] else None
         self._modem_wait = cfg['ModemConnection']['modem_wait']
 
         self._data_conn = None
         self._dataxfer_errors = 0
         self._message_queue = queue.PriorityQueue()
-        self._modem_lock = ModemLock(self._modem_power) if self._modem_power else ModemLock()
+        self._modem_lock = ModemLock()
         self._modem_wait = float(self._modem_wait)
         # TODO: This should be synchronized, but we won't really run into those issues with it as we never switch
         #  the modem off whilst it's running
