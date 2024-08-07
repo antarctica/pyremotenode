@@ -20,6 +20,7 @@ class ConnectionException(Exception):
 class BaseConnection(metaclass=ABCMeta):
     """ Connection interface for communications - usable by tasks et al
 
+    This is hopefully fairly compatible for any Hayes compatible device
     Expose a common interface of for communications functionality as well as handling
     some of the common things:
         - RS232 comms to the modems

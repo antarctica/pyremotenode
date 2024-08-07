@@ -114,7 +114,7 @@ class RudicsConnection(BaseConnection):
             if not self.data_conn.is_open:
                 logging.info("Opening existing modem serial connection")
                 self.data_conn.open()
-            ## TODO: Shared object now between threads, at startup, don't think this needs to be present
+            # TODO: Shared object now between threads, at startup, don't think this needs to be present
             else:
                 logging.warning("Modem appears to already be open, wasn't previously closed!?!")
 #                    raise ConnectionException(
@@ -393,10 +393,30 @@ class CertusConnection(BaseConnection):
     def get_system_time(self):
         pass
 
-    def process_message(self, msg=None):
-        pass
+    def initialise_modem(self):
+        super().initialise_modem()
 
-    def process_outstanding_messages(self):
+        devices = ['"Mini"']
+        reply = self.modem_command("AT+CGMM")
+
+        try:
+            device = reply.split(self.terminator)[0].split(":")[1].strip()
+        except (IndexError, ValueError):
+            raise ConnectionException("Could not parse device response")
+
+        if device not in devices:
+            raise ConnectionException("{} can only be used with {}, but we got {}".
+                                      format(self.__class__.__name__, " or ".join(devices), device))
+
+        # TODO: https://docs.rockremote.io/serial-raw-imt#status-of-mt-imt
+        #  this will need to be run periodically as here we switch off unsolicited messages
+        # TODO: handle unsolicited messages and avoid turning them off
+        reply = self.modem_command("AT+UNS=0")
+
+        if reply.split()[-1] != "OK":
+            raise ConnectionException("Cannot switch Certus modem to solicited messaging mode")
+
+    def process_message(self, msg=None):
         pass
 
     def process_transfer(self, filename):
