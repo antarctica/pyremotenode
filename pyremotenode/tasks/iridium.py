@@ -70,14 +70,16 @@ class MessageSender(BaseSender):
             warning = False
             critical = False
 
-        self.modem.send_message(Message(
+        msg = Message(
             message_text,
             binary=invoking_task.binary,
             include_date=not invoking_task.binary,
             warning=warning,
             critical=critical,
             max_length=self._message_length
-        ))
+        )
+        print(msg)
+        self.modem.send_message(msg)
         self.modem.start()
 
     def send_message(self, message, include_date=True):

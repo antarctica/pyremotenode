@@ -402,9 +402,4 @@ class CertusConnection(BaseConnection):
     def process_transfer(self, filename):
         pass
 
-    def send_file(self):
-        pass
-
-    def send_message(self):
-        pass
 
