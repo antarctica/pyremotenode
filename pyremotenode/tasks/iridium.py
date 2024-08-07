@@ -12,12 +12,11 @@ from pyremotenode.tasks.utils import CheckCommand
 
 class BaseSender(BaseTask):
     def __init__(self, **kwargs):
-        BaseTask.__init__(self, **kwargs)
+        super().__init__(**kwargs)
         self._modem = ModemConnection()
 
     def default_action(self, **kwargs):
         raise NotImplementedError
-
 
     @property
     def modem(self):
@@ -26,7 +25,7 @@ class BaseSender(BaseTask):
 
 class FileSender(BaseSender):
     def __init__(self, **kwargs):
-        BaseSender.__init__(self, **kwargs)
+        super().__init__(**kwargs)
 
     def default_action(self, invoking_task, **kwargs):
         logging.debug("Running default action for FileSender")
@@ -47,9 +46,16 @@ class FileSender(BaseSender):
 
 
 class MessageSender(BaseSender):
-    def __init__(self, **kwargs):
+    def __init__(self,
+                 class_type=None,
+                 message_length=None,
+                 **kwargs):
         super().__init__(**kwargs)
-        self._message_length = None
+
+        if class_type is not None and not isinstance(self.modem.instance, class_type):
+            raise ModemConnectionException("Wrong type of modem connection: {}".format(self.modem.__class__.__name__))
+
+        self._message_length = message_length
 
     def default_action(self, invoking_task, **kwargs):
         logging.debug("Running default action for SBDSender")
@@ -81,21 +87,31 @@ class MessageSender(BaseSender):
     def message_length(self):
         return self._message_length
 
+    @message_length.setter
+    def message_length(self, value):
+        self._message_length = value
+
 
 class IMTSender(MessageSender):
-    pass
+    def __init__(self, **kwargs):
+        super().__init__(
+            class_type=pyremotenode.comms.iridium.CertusConnection,
+            message_length=100 * 1024,
+            **kwargs)
 
 
 class SBDSender(MessageSender):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(
+            class_type=pyremotenode.comms.iridium.RudicsConnection,
+            message_length=1920,
+            **kwargs)
 
-        if not isinstance(self.modem, pyremotenode.comms.iridium.RudicsConnection):
-            raise ModemConnectionException("Wrong type of modem connection")
-        self._message_length = 1920 if not self.modem.rockblock else 340
+        if not self.modem.rockblock:
+            self.message_length = 340
 
 
-class Message(object):
+class Message:
     def __init__(self,
                  msg,
                  include_date=True,

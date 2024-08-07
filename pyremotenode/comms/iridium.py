@@ -388,7 +388,13 @@ class CertusConnection(BaseConnection):
     def get_system_time(self):
         pass
 
+    def process_message(self, msg=None):
+        pass
+
     def process_outstanding_messages(self):
+        pass
+
+    def process_transfer(self, filename):
         pass
 
     def send_file(self):
@@ -397,5 +403,3 @@ class CertusConnection(BaseConnection):
     def send_message(self):
         pass
 
-    def run(self):
-        pass
