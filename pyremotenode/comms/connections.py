@@ -79,6 +79,8 @@ class BaseConnection(metaclass=ABCMeta):
 
         self.max_reg_checks = int(cfg['ModemConnection']['max_reg_checks']) \
             if 'max_reg_checks' in cfg['ModemConnection'] else 6
+        self.poll_periodically = bool(cfg['ModemConnection']['poll_periodically']) \
+            if 'poll_periodically' in cfg['ModemConnection'] else False
         self.reg_check_interval = float(cfg['ModemConnection']['reg_check_interval']) \
             if 'reg_check_interval' in cfg['ModemConnection'] else 10
         self.mt_destination = cfg['ModemConnection']['mt_destination'] \
@@ -205,6 +207,9 @@ class BaseConnection(metaclass=ABCMeta):
 
         if dont_decode:
             logging.info("Response of {} bytes received".format(bytes_read))
+
+            with open("test.{}.msg".format(bytes_read), "wb") as fh:
+                fh.write(reply)
         else:
             reply = reply.decode().strip()
             logging.info('Response received: "{}"'.format(reply))
@@ -242,6 +247,9 @@ class BaseConnection(metaclass=ABCMeta):
                 fh.write(payload)
         except (OSError, IOError):
             logging.error("Could not write {}, abandoning...".format(payload))
+
+    def poll_for_messages(self):
+        pass
 
     @abstractmethod
     def process_message(self, msg=None):
@@ -302,6 +310,11 @@ class BaseConnection(metaclass=ABCMeta):
                             logging.info("Processed {} outgoing messages".format(num if num is not None else 0))
                         else:
                             logging.warning("Not enough signal to perform activities")
+                    else:
+                        # TODO: this is were we could respond to unsolicited messaging from modem
+                        if self.poll_periodically and self.signal_check():
+                            logging.debug("Polling for messages")
+                            self.poll_for_messages()
                     logging.info("Reached end of modem usage for this iteration...")
             except ConnectionException:
                 logging.error("Out of logic modem operations, breaking to restart...")

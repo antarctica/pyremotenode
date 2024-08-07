@@ -471,6 +471,10 @@ class CertusConnection(BaseConnection):
         if reply.split()[-1] != "OK":
             raise ConnectionException("Cannot switch Certus modem to solicited messaging mode")
 
+    def poll_for_messages(self):
+        response = self.modem_command("AT+IMTMTS")
+        self.mt_queued = response.splitlines()[0].startswith("+IMTMTS: ")
+
     def process_message(self, msg=None):
         if msg:
             text = msg.get_message_text()
@@ -515,7 +519,7 @@ class CertusConnection(BaseConnection):
                             "Could not decompose the values from the incoming SBD message: {}".format(e.message))
 
                     self.output_recv_message(mt_msg_id,
-                                             mt_msg_len - 2,  # The checksum is included in the received value
+                                             mt_msg_len,  # The checksum is included in the received value
                                              message,
                                              calcd_chksum,
                                              recv_chksum)
