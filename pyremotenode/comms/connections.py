@@ -252,7 +252,7 @@ class BaseConnection(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def process_message(self, msg=None):
+    def process_message(self, msg):
         pass
 
     def process_outstanding_messages(self):
@@ -283,9 +283,7 @@ class BaseConnection(metaclass=ABCMeta):
                 self.message_queue.put(msg)
                 raise
 
-        while self.mt_queued:
-            logging.info("Outstanding MT messages, collecting...")
-            self.process_message()
+        self.poll_for_messages()
 
     @abstractmethod
     def process_transfer(self, filename):
@@ -293,29 +291,37 @@ class BaseConnection(metaclass=ABCMeta):
 
     def run(self):
         while self.running:
+            # TODO: this was written a long time ago and smells slightly, why are we independently
+            #  tracking the status of a re-entrant lock?
             modem_locked = False
 
             try:
-                if not self.message_queue.empty() \
-                        and self.modem_lock.acquire(blocking=False):
-                    modem_locked = True
+                if not self.message_queue.empty():
+                    if self.modem_lock.acquire(blocking=False):
+                        modem_locked = True
+                        self.initialise_modem()
 
-                    self.initialise_modem()
+                        if not self.message_queue.empty():
+                            logging.debug("Current queue size approx.: {}".format(str(self.message_queue.qsize())))
 
-                    if not self.message_queue.empty():
-                        logging.debug("Current queue size approx.: {}".format(str(self.message_queue.qsize())))
+                            if self.signal_check():
+                                num = self.process_outstanding_messages()
+                                logging.info("Processed {} outgoing messages".format(num if num is not None else 0))
+                            else:
+                                logging.warning("Not enough signal to perform activities")
+                    else:
+                        logging.warning("Unable to acquire the modem lock, abandoning for the mo")
+                else:
+                    # TODO: this is were we could respond to unsolicited messaging from modem
+                    if self.poll_periodically and self.modem_lock.acquire(blocking=False):
+                        modem_locked = True
+                        self.initialise_modem()
 
                         if self.signal_check():
-                            num = self.process_outstanding_messages()
-                            logging.info("Processed {} outgoing messages".format(num if num is not None else 0))
-                        else:
-                            logging.warning("Not enough signal to perform activities")
-                    else:
-                        # TODO: this is were we could respond to unsolicited messaging from modem
-                        if self.poll_periodically and self.signal_check():
-                            logging.debug("Polling for messages")
+                            logging.debug("Polling modem for messages")
                             self.poll_for_messages()
-                    logging.info("Reached end of modem usage for this iteration...")
+
+                logging.info("Reached end of modem usage for this iteration...")
             except ConnectionException:
                 logging.error("Out of logic modem operations, breaking to restart...")
                 logging.error(traceback.format_exc())

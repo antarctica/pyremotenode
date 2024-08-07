@@ -24,6 +24,11 @@ class BaseSender(BaseTask):
         return self._modem
 
 
+class ModemStarter(BaseSender):
+    def default_action(self, **kwargs):
+        self.modem.start()
+
+
 class FileSender(BaseSender):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

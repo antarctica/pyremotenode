@@ -87,8 +87,7 @@ class BaseTask(object):
         self._ready = ready
 
 
-from pyremotenode.tasks.iridium import FileSender, SBDSender, WakeupTask, IMTSender
-from pyremotenode.comms.base import ModemConnection
+from pyremotenode.tasks.iridium import FileSender, SBDSender, WakeupTask, IMTSender, ModemStarter
 from pyremotenode.tasks.loh import SendLoHBaselines
 from pyremotenode.tasks.ssh import SshTunnel
 from pyremotenode.tasks.ts7400 import Sleep

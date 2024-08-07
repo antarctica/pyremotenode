@@ -165,11 +165,12 @@ class Scheduler(object):
         for idx, cfg in enumerate(self._cfg['actions']):
             logging.debug("Configuring action instance {0}: type {1}".format(idx, cfg['task']))
             action = SchedulerAction(cfg)
+            args = dict() if 'args' not in cfg else cfg['args']
             obj = TaskInstanceFactory.get_item(
                 id=cfg['id'],
                 scheduler=self,
                 task=cfg['task'],
-                **cfg['args'])
+                **args)
 
             # TODO: Do we want to retain the processing order past here? It is not a logic driver so no is my inclination
             self._schedule_action_instances[cfg['id']] = action

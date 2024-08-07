@@ -153,6 +153,11 @@ class RudicsConnection(BaseConnection):
             if not registered:
                 raise ConnectionException("Failed to register on network")
 
+    def poll_for_messages(self):
+        while self.mt_queued:
+            logging.info("Outstanding MT messages, collecting...")
+            self.process_message()
+
     # TODO: All this logic needs a rewrite, it's too dependent on MO message initiation
     def process_message(self, msg=None):
         if msg:
@@ -475,26 +480,6 @@ class CertusConnection(BaseConnection):
         response = self.modem_command("AT+IMTMTS")
         self.mt_queued = response.splitlines()[0].startswith("+IMTMTS: ")
 
-    def process_message(self, msg=None):
-        if msg:
-            text = msg.get_message_text()
-
-            response = self.modem_command("AT+IMTWB={}".format(len(text)))
-            if not response.splitlines()[-1].strip().endswith("READY"):
-                raise ConnectionException("Error preparing for binary message: {}".format(response))
-
-            payload = text.encode() if not msg.binary else text
-            payload += CertusConnection.calculate_crc16(payload).to_bytes(2, "big")
-            response = self.modem_command(payload, raw=True)
-
-            if response.splitlines()[-1] != "OK":
-                raise ConnectionException("Error writing output binary for SBD".format(response))
-            message_id = response.splitlines()[0].split(":")[1]
-            logging.info("Sent {} bytes with message ID {}".format(len(payload), message_id))
-
-        response = self.modem_command("AT+IMTMTS")
-        self.mt_queued = response.splitlines()[0].startswith("+IMTMTS: ")
-
         if self.mt_queued:
             msg_info = response.splitlines()[0].replace("+IMTMTS: ", "").strip()
             topic_id, mt_msg_id, mt_msg_len = msg_info.split(",")
@@ -526,6 +511,23 @@ class CertusConnection(BaseConnection):
                     response = self.modem_command("AT+IMTA={}".format(mt_msg_id))
                     if response.splitlines()[-1] == "OK":
                         logging.info("Acknowledged IMT message ID {}".format(mt_msg_id))
+
+    def process_message(self, msg):
+        if msg:
+            text = msg.get_message_text()
+
+            response = self.modem_command("AT+IMTWB={}".format(len(text)))
+            if not response.splitlines()[-1].strip().endswith("READY"):
+                raise ConnectionException("Error preparing for binary message: {}".format(response))
+
+            payload = text.encode() if not msg.binary else text
+            payload += CertusConnection.calculate_crc16(payload).to_bytes(2, "big")
+            response = self.modem_command(payload, raw=True)
+
+            if response.splitlines()[-1] != "OK":
+                raise ConnectionException("Error writing output binary for SBD".format(response))
+            message_id = response.splitlines()[0].split(":")[1]
+            logging.info("Sent {} bytes with message ID {}".format(len(payload), message_id))
 
         return True
 
