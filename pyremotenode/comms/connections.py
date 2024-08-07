@@ -211,6 +211,37 @@ class BaseConnection(metaclass=ABCMeta):
 
         return reply
 
+    def output_recv_message(self,
+                            recv_msg_id,
+                            recv_msg_len,
+                            payload,
+                            calcd_chksum,
+                            recv_chksum):
+        valid = False
+        if int(recv_msg_len) != len(payload):
+            logging.warning("Message length indicated {} is not the same as actual message: {}".format(
+                recv_msg_len, len(payload)
+            ))
+        elif calcd_chksum != recv_chksum:
+            logging.warning("Message checksum {} is not the same as calculated checksum: {}".format(
+                calcd_chksum, recv_chksum
+            ))
+        else:
+            valid = True
+
+        msg_dt = datetime.utcnow().strftime("%d%m%Y%H%M%S")
+        msg_path = self.mt_destination if valid else os.path.join(self.mt_destination, "invalid")
+        msg_filename = os.path.join(
+            msg_path,
+            "{}_{}.{}".format(recv_msg_id, msg_dt, "msg" if valid else "bak"))
+        logging.info("Received MT message, outputting to {}".format(msg_filename))
+
+        try:
+            with open(msg_filename, "wb") as fh:
+                fh.write(payload)
+        except (OSError, IOError):
+            logging.error("Could not write {}, abandoning...".format(payload))
+
     @abstractmethod
     def process_message(self, msg=None):
         pass

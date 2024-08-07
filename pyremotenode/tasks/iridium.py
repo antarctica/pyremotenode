@@ -78,7 +78,6 @@ class MessageSender(BaseSender):
             critical=critical,
             max_length=self._message_length
         )
-        print(msg)
         self.modem.send_message(msg)
         self.modem.start()
 
@@ -96,10 +95,21 @@ class MessageSender(BaseSender):
 
 
 class IMTSender(MessageSender):
-    def __init__(self, **kwargs):
+    def __init__(self,
+                 binary=True,
+                 class_type=pyremotenode.comms.iridium.CertusConnection,
+                 critical=False,
+                 include_date=False,
+                 message_length=100 * 1024,
+                 warning=False,
+                 **kwargs):
         super().__init__(
+            binary=True,
             class_type=pyremotenode.comms.iridium.CertusConnection,
+            critical=critical,
+            include_date=False,
             message_length=100 * 1024,
+            warning=warning,
             **kwargs)
 
 
