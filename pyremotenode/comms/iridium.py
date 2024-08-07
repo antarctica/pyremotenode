@@ -19,7 +19,7 @@ class RudicsConnection(BaseConnection):
     re_msstm_response = re.compile(r'^-MSSTM: ([0-9a-f]{8}).*', re.MULTILINE | re.IGNORECASE)
 
     def __init__(self, cfg, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(cfg, *args, **kwargs)
 
         # TODO: there should be some accessors for these as properties
         # Defeats https://github.com/pyserial/pyserial/issues/59 with socat usage
@@ -90,21 +90,26 @@ class RudicsConnection(BaseConnection):
 
         :return: None
         """
-        if not self.data_conn:
-            logging.info("Creating pyserial comms instance to modem")
-            # Instantiation = opening of port hence why this is here and not in the constructor
-            self.data_conn = serial.Serial(
-                port=self.serial_port,
-                timeout=float(self.serial_timeout),
-                write_timeout=float(self.serial_timeout),
-                baudrate=self.serial_baud,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                # TODO: Extend to allow config file for HW flow control
-                rtscts=self.virtual,
-                dsrdtr=self.virtual
-            )
+        if self.data_conn is None:
+            if os.path.exists(self.serial_port):
+                logging.info("Creating pyserial comms instance to modem: {}".format(self.serial_port))
+                # Instantiation = opening of port hence why this is here and not in the constructor
+                self.data_conn = serial.Serial(
+                    port=self.serial_port,
+                    timeout=float(self.serial_timeout),
+                    write_timeout=float(self.serial_timeout),
+                    baudrate=self.serial_baud,
+                    bytesize=serial.EIGHTBITS,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_ONE,
+                    # TODO: Extend to allow config file for HW flow control
+                    rtscts=self.virtual,
+                    dsrdtr=self.virtual
+                )
+            else:
+                raise ConnectionException("There is no path: {} so cannot attempt to open it as a serial connection".
+                                          format(self.serial_port))
+
         else:
             if not self.data_conn.is_open:
                 logging.info("Opening existing modem serial connection")

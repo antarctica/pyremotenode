@@ -18,7 +18,7 @@ class ModemConnection:
             cfg = Configuration().config
 
             impl = RudicsConnection \
-                if "type" in cfg["ModemConnection"] and cfg["ModemConnection"]["type"] != "certus" \
+                if "type" not in cfg["ModemConnection"] or cfg["ModemConnection"]["type"] != "certus" \
                 else CertusConnection
             logging.debug("ModemConnection instantiation")
             ModemConnection._instance = impl(cfg)

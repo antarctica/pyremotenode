@@ -14,6 +14,7 @@ class BaseSender(BaseTask):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._modem = ModemConnection()
+        logging.info("BaseSender has created {}".format(self.modem.instance.__class__.__name__))
 
     def default_action(self, **kwargs):
         raise NotImplementedError

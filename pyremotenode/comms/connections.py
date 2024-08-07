@@ -293,7 +293,7 @@ class BaseConnection(metaclass=ABCMeta):
                     logging.warning("Looks like the lock wasn't acquired, dealing with this...")
 
             logging.debug("{} thread waiting...".format(self.__class__.__name__))
-            tm.sleep(self.modem_wait)
+            tm.sleep(self._modem_wait)
 
     def send_file(self, file, timeout=None):
         self.message_queue.put((self.priority_file_mo, file))
@@ -339,7 +339,7 @@ class BaseConnection(metaclass=ABCMeta):
                 logging.info("Starting modem thread")
                 self._thread = t.Thread(name=self.__class__.__name__, target=self.run)
                 self._thread.setDaemon(True)
-                self.running = True
+                self._running = True
                 self._thread.start()
 
     @property
