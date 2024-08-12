@@ -156,12 +156,12 @@ class RudicsConnection(BaseConnection):
     def poll_for_messages(self):
         while self.mt_queued:
             logging.info("Outstanding MT messages, collecting...")
-            self.process_message()
+            self.process_message(None)
 
     # TODO: All this logic needs a rewrite, it's too dependent on MO message initiation
-    def process_message(self, msg=None):
-        if msg:
-            text = msg.get_message_text()# .replace("\n", " ")
+    def process_message(self, msg):
+        if msg is not None:
+            text = msg.get_message_text()
 
             response = self.modem_command("AT+SBDWB={}".format(len(text)))
             if response.splitlines()[-1] != "READY":

@@ -65,8 +65,6 @@ class BaseConnection(metaclass=ABCMeta):
         self._thread = None
         self._thread_lock = t.Lock()       # Lock thread creation
 
-        self._mt_queued = False
-
         # Process out behavioural settings from the configuration
         # TODO: this can be made much more concise using a Configuration getter with defaults
         # TODO: there should be some accessors for these as properties
@@ -283,13 +281,12 @@ class BaseConnection(metaclass=ABCMeta):
                 self.message_queue.put(msg)
                 raise
 
-        self.poll_for_messages()
-
     @abstractmethod
     def process_transfer(self, filename):
         pass
 
     def run(self):
+        # TODO: this needs a refactor now that polling and processing are separated
         while self.running:
             # TODO: this was written a long time ago and smells slightly, why are we independently
             #  tracking the status of a re-entrant lock?
@@ -307,6 +304,8 @@ class BaseConnection(metaclass=ABCMeta):
                             if self.signal_check():
                                 num = self.process_outstanding_messages()
                                 logging.info("Processed {} outgoing messages".format(num if num is not None else 0))
+
+                                self.poll_for_messages()
                             else:
                                 logging.warning("Not enough signal to perform activities")
                     else:
@@ -411,14 +410,6 @@ class BaseConnection(metaclass=ABCMeta):
     @property
     def modem_lock(self):
         return self._modem_lock
-
-    @property
-    def mt_queued(self):
-        return self._mt_queued
-
-    @mt_queued.setter
-    def mt_queued(self, value):
-        self._mt_queued = value
 
     @property
     def running(self):
