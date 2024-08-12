@@ -154,9 +154,8 @@ class RudicsConnection(BaseConnection):
                 raise ConnectionException("Failed to register on network")
 
     def poll_for_messages(self):
-        while self.mt_queued:
-            logging.info("Outstanding MT messages, collecting...")
-            self.process_message(None)
+        logging.info("Outstanding MT messages, collecting...")
+        self.process_message(None)
 
     # TODO: All this logic needs a rewrite, it's too dependent on MO message initiation
     def process_message(self, msg):
@@ -176,7 +175,6 @@ class RudicsConnection(BaseConnection):
                 raise ConnectionException("Error writing output binary for SBD".format(response))
 
         mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued = None, 0, None, None, 0, 0
-        self.mt_queued = False
 
         # TODO: BEGIN: this block with repeated SBDIX can overwrite the receiving message buffers
         while not mo_status or int(mo_status) > 4:
@@ -186,10 +184,6 @@ class RudicsConnection(BaseConnection):
 
             mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued = \
                 self.re_sbdix_response.search(response).groups()
-
-        if int(mt_queued) > 0:
-            logging.debug("We have messages still waiting at the GSS, will pick them up at end of message run")
-            self.mt_queued = True
 
         # NOTE: Configure modems to not have ring alerts on SBD
         if int(mt_status) == 1:
@@ -478,9 +472,9 @@ class CertusConnection(BaseConnection):
 
     def poll_for_messages(self):
         response = self.modem_command("AT+IMTMTS")
-        self.mt_queued = response.splitlines()[0].startswith("+IMTMTS: ")
+        mt_queued = response.splitlines()[0].startswith("+IMTMTS: ")
 
-        if self.mt_queued:
+        if mt_queued:
             msg_info = response.splitlines()[0].replace("+IMTMTS: ", "").strip()
             topic_id, mt_msg_id, mt_msg_len = msg_info.split(",")
 
