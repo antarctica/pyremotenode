@@ -8,6 +8,7 @@ import pyremotenode.comms.iridium
 from pyremotenode.comms.base import ModemConnection, ModemConnectionException
 from pyremotenode.tasks import BaseTask
 from pyremotenode.tasks.utils import CheckCommand
+from pyremotenode.utils.config import Configuration
 
 
 class BaseSender(BaseTask):
@@ -64,7 +65,7 @@ class MessageSender(BaseSender):
         self._message_length = message_length
 
     def default_action(self, invoking_task, **kwargs):
-        logging.debug("Running default action for SBDSender")
+        logging.debug("Running default action for MessageSender")
 
         if not invoking_task.binary:
             message_text = str(invoking_task.message)

@@ -4,31 +4,25 @@ import logging
 import os
 import re
 import shlex
-import stat
 import subprocess
 
 from datetime import datetime
 
 from pyremotenode.tasks.iridium import SBDSender
-from pyremotenode.utils.config import Configuration
 
 
 class MessageProcessor(object):
     @staticmethod
     def ingest(scheduler):
         # TODO: currently available commands, ideally the messageprocessor should gain a list of messages from a
-        # pyremotenode.messages factory and individually process message headers against their abstract .header_re()
-        # method
+        #  pyremotenode.messages factory and process message headers against their abstract .header_re() method
         # TODO: Check for configurations updates
         re_command = re.compile(b'^(EXECUTE|DOWNLOAD)(?:\s(.+))?\n')
 
-        msg_source = scheduler.settings['msg_inbox'] \
-            if 'msg_inbox' in scheduler.settings else os.path.join(
-            os.sep, "data", "pyremotenode", "messages")
-        msg_archive = scheduler.settings['msg_archive'] \
-            if 'msg_archive' in scheduler.settings else os.path.join(
-            os.sep, "data", "pyremotenode", "messages", "archive"
-        )
+        msg_source = scheduler.settings['msg_inbox'] if 'msg_inbox' in scheduler.settings else \
+            os.path.join(os.sep, "data", "pyremotenode", "messages")
+        msg_archive = scheduler.settings['msg_archive'] if 'msg_archive' in scheduler.settings else \
+            os.path.join(os.sep, "data", "pyremotenode", "messages", "archive")
 
         filelist = os.listdir(msg_source)
         sortedmsgs = sorted([f for f in filelist if os.path.isfile(os.path.join(msg_source, f))],
@@ -49,6 +43,7 @@ class MessageProcessor(object):
                 header_match = re_command.match(content)
 
                 if not header_match:
+                    logging.warning("Don't understand directives in {}".format(msg_file))
                     MessageProcessor.move_to(msg_archive, msg_file, "invalid_header")
                     continue
 

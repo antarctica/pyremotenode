@@ -7,7 +7,6 @@ from pyremotenode.utils import Configuration
 # TODO: We need to implement a shared key security system on the web-exposed service
 # TODO: This whole implementation is intrisincally tied to the TS7400
 
-
 class ModemConnection:
     _instance = None
 
