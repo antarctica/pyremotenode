@@ -481,6 +481,7 @@ class CertusConnection(BaseConnection):
             mt_message = self.modem_command("AT+IMTRB={}".format(topic_id), dont_decode=True)
 
             if mt_message:
+                mt_message = mt_message.rstrip("\rOK\r".encode("ascii"))
                 try:
                     message = mt_message[0:-2]
                     chksum = mt_message[-2:]
@@ -498,7 +499,8 @@ class CertusConnection(BaseConnection):
                             "Could not decompose the values from the incoming SBD message: {}".format(e.message))
 
                     self.output_recv_message(mt_msg_id,
-                                             mt_msg_len,  # The checksum is included in the received value
+                                             # Remove the unnecessary checksum inclusion
+                                             int(mt_msg_len) - 2,
                                              message,
                                              calcd_chksum,
                                              recv_chksum)

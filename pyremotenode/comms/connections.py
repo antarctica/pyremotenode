@@ -77,6 +77,8 @@ class BaseConnection(metaclass=ABCMeta):
 
         self.max_reg_checks = int(cfg['ModemConnection']['max_reg_checks']) \
             if 'max_reg_checks' in cfg['ModemConnection'] else 6
+        self.min_signal_level = int(cfg['ModemConnection']['min_signal_level']) \
+            if 'min_signal_level' in cfg['ModemConnection'] else 3
         self.poll_periodically = bool(cfg['ModemConnection']['poll_periodically']) \
             if 'poll_periodically' in cfg['ModemConnection'] else False
         self.reg_check_interval = float(cfg['ModemConnection']['reg_check_interval']) \
@@ -205,8 +207,7 @@ class BaseConnection(metaclass=ABCMeta):
 
         if dont_decode:
             logging.info("Response of {} bytes received".format(bytes_read))
-
-            with open("test.{}.msg".format(bytes_read), "wb") as fh:
+            with open("test2.{}.msg".format(bytes_read), "wb") as fh:
                 fh.write(reply)
         else:
             reply = reply.decode().strip()
@@ -221,7 +222,7 @@ class BaseConnection(metaclass=ABCMeta):
                             calcd_chksum,
                             recv_chksum):
         valid = False
-        if int(recv_msg_len) != len(payload):
+        if recv_msg_len != len(payload):
             logging.warning("Message length indicated {} is not the same as actual message: {}".format(
                 recv_msg_len, len(payload)
             ))
@@ -301,7 +302,7 @@ class BaseConnection(metaclass=ABCMeta):
                         if not self.message_queue.empty():
                             logging.debug("Current queue size approx.: {}".format(str(self.message_queue.qsize())))
 
-                            if self.signal_check():
+                            if self.signal_check(self.min_signal_level):
                                 num = self.process_outstanding_messages()
                                 logging.info("Processed {} outgoing messages".format(num if num is not None else 0))
 
@@ -316,7 +317,7 @@ class BaseConnection(metaclass=ABCMeta):
                         modem_locked = True
                         self.initialise_modem()
 
-                        if self.signal_check():
+                        if self.signal_check(self.min_signal_level):
                             logging.debug("Polling modem for messages")
                             self.poll_for_messages()
 
