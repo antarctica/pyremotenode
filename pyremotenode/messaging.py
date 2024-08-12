@@ -63,7 +63,7 @@ class MessageProcessor(object):
                     MessageProcessor.move_to(msg_archive, msg_file, "invalid_header")
                     continue
 
-                command = "Run{}".format(command.capitalize())
+                command = "run_{}".format(command)
 
                 try:
                     func = getattr(MessageProcessor, "{}".format(command))
@@ -94,7 +94,7 @@ class MessageProcessor(object):
             os.unlink(msg)
 
     @staticmethod
-    def RunExecute(cmd_str, body, key="pyljXHFxDg58."):
+    def run_execute(cmd_str, body, key="pyljXHFxDg58."):
         executed = False
         result = ""
 
@@ -117,7 +117,7 @@ class MessageProcessor(object):
         return executed
 
     @staticmethod
-    def RunDownload(arg_str, body):
+    def run_download(arg_str, body):
         # Format: gzipped? <filename>
         args = shlex.split(arg_str)
         filename = None
