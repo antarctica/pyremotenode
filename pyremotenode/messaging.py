@@ -8,29 +8,35 @@ import subprocess
 
 from datetime import datetime
 
-from pyremotenode.tasks.iridium import SBDSender
+from pyremotenode.tasks.iridium import SBDSender, IMTSender
 
 
-class MessageProcessor(object):
-    @staticmethod
-    def ingest(scheduler):
+class MessageProcessor:
+    def __init__(self, cfg, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._archive = cfg["general"]["msg_archive"] if "msg_archive" in cfg["general"] else \
+            os.path.join(os.sep, "data", "pyremotenode", "messages", "archive")
+        self._source = cfg["general"]["msg_inbox"] if "msg_inbox" in cfg["general"] else \
+            os.path.join(os.sep, "data", "pyremotenode", "messages")
+
+        self._sender = SBDSender \
+            if "type" not in cfg["ModemConnection"] or cfg["ModemConnection"]["type"] != "certus" \
+            else IMTSender
+
+    def ingest(self):
         # TODO: currently available commands, ideally the messageprocessor should gain a list of messages from a
         #  pyremotenode.messages factory and process message headers against their abstract .header_re() method
         # TODO: Check for configurations updates
         re_command = re.compile(b'^(EXECUTE|DOWNLOAD)(?:\s(.+))?\n')
 
-        msg_source = scheduler.settings['msg_inbox'] if 'msg_inbox' in scheduler.settings else \
-            os.path.join(os.sep, "data", "pyremotenode", "messages")
-        msg_archive = scheduler.settings['msg_archive'] if 'msg_archive' in scheduler.settings else \
-            os.path.join(os.sep, "data", "pyremotenode", "messages", "archive")
+        filelist = os.listdir(self._source)
+        sorted_msgs = sorted([f for f in filelist if os.path.isfile(os.path.join(self._source, f))],
+                             key=lambda x: datetime.strptime(x[x.index("_")+1:-4], "%d%m%Y%H%M%S"))
 
-        filelist = os.listdir(msg_source)
-        sortedmsgs = sorted([f for f in filelist if os.path.isfile(os.path.join(msg_source, f))],
-                            key=lambda x: datetime.strptime(x[x.index("_")+1:-4], "%d%m%Y%H%M%S"))
-
-        for msg_filename in sortedmsgs:
+        for msg_filename in sorted_msgs:
             try:
-                msg_file = os.path.join(msg_source, msg_filename)
+                msg_file = os.path.join(self._source, msg_filename)
                 logging.info("Processing message file {}".format(msg_file))
 
                 # We read the entire file at this point, currently only single SBDs are the source
@@ -44,7 +50,7 @@ class MessageProcessor(object):
 
                 if not header_match:
                     logging.warning("Don't understand directives in {}".format(msg_file))
-                    MessageProcessor.move_to(msg_archive, msg_file, "invalid_header")
+                    MessageProcessor.move_to(msg_file, "invalid_header")
                     continue
 
                 (command, arg_str) = header_match.groups()
@@ -55,7 +61,7 @@ class MessageProcessor(object):
                     arg_str = arg_str.decode()
                 except UnicodeDecodeError:
                     logging.exception("Could not decode header information for command")
-                    MessageProcessor.move_to(msg_archive, msg_file, "invalid_header")
+                    MessageProcessor.move_to(msg_file, "invalid_header")
                     continue
 
                 command = "run_{}".format(command)
@@ -64,32 +70,30 @@ class MessageProcessor(object):
                     func = getattr(MessageProcessor, "{}".format(command))
                 except AttributeError:
                     logging.exception("No command available: {}".format(command))
-                    MessageProcessor.move_to(msg_archive, msg_file, "invalid_header")
+                    MessageProcessor.move_to(msg_file, "invalid_header")
                     continue
 
                 if func(arg_str, msg_body):
-                    MessageProcessor.move_to(msg_archive, msg_file)
+                    MessageProcessor.move_to(msg_file)
                 else:
-                    MessageProcessor.move_to(msg_archive, msg_file, "cmd_failed")
+                    MessageProcessor.move_to(msg_file, "cmd_failed")
             except Exception:
                 logging.exception("Problem encountered processing message {}".format(msg_file))
-                MessageProcessor.move_to(msg_archive, msg_file, "failed")
+                MessageProcessor.move_to(msg_file, "failed")
 
-    @staticmethod
-    def move_to(dst, msg, reason="processed"):
+    def move_to(self, msg, reason="processed"):
         try:
-            if not os.path.exists(dst):
-                os.makedirs(dst)
+            if not os.path.exists(self._archive):
+                os.makedirs(self._archive, exist_ok=True)
 
             os.rename(msg, os.path.join(
-                dst, "{}.{}".format(os.path.basename(msg), reason)))
+                self._archive, "{}.{}".format(os.path.basename(msg), reason)))
         except OSError as e:
-            logging.exception("Cannot move error producing message to {}: {}".format(dst, e.strerror))
+            logging.exception("Cannot move error producing message to {}: {}".format(self._archive, e.strerror))
             # If we can't remove, allow the exception to propagate to the caller
             os.unlink(msg)
 
-    @staticmethod
-    def run_execute(cmd_str, body, key="pyljXHFxDg58."):
+    def run_execute(self, cmd_str, body, key="pyljXHFxDg58."):
         executed = False
         result = ""
 
@@ -107,12 +111,11 @@ class MessageProcessor(object):
             result = "Could not encode return from command : {}".format(e.reason)
             logging.exception(result)
 
-        sbd = SBDSender(id='message_execute')
-        sbd.send_message(result[:1920], include_date=True)
+        sbd = self._sender(id='message_execute')
+        sbd.send_message("\n{}".format(result), include_date=True)
         return executed
 
-    @staticmethod
-    def run_download(arg_str, body):
+    def run_download(self, arg_str, body):
         # Format: gzipped? <filename>
         args = shlex.split(arg_str)
         filename = None
@@ -170,5 +173,5 @@ class MessageProcessor(object):
             logging.info(msg)
 
         sbd = SBDSender(id='message_download')
-        sbd.send_message("\n".join(result)[:1920], include_date=True)
+        sbd.send_message("\n{}".format(result), include_date=True)
         return downloaded

@@ -97,6 +97,7 @@ class Scheduler(object):
 
         try:
             with pid_file(self._pid):
+                msg_processor = MessageProcessor(self._cfg)
                 self._running = True
 
                 self._schedule.print_jobs()
@@ -105,7 +106,7 @@ class Scheduler(object):
                 while self._running:
                     try:
                         tm.sleep(int(hk_sleep))
-                        MessageProcessor.ingest(self)
+                        msg_processor.ingest()
                     except Exception:
                         logging.exception("Error in main thread, something very wrong, schedule will continue...")
         finally:
@@ -172,7 +173,8 @@ class Scheduler(object):
                 task=cfg['task'],
                 **args)
 
-            # TODO: Do we want to retain the processing order past here? It is not a logic driver so no is my inclination
+            # TODO: Do we want to retain the processing order past here?
+            #  It is not a logic driver so no is my inclination
             self._schedule_action_instances[cfg['id']] = action
             self._schedule_task_instances[cfg['id']] = obj
 

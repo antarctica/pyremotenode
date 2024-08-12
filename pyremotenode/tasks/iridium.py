@@ -65,7 +65,7 @@ class MessageSender(BaseSender):
         self._message_length = message_length
 
     def default_action(self, invoking_task, **kwargs):
-        logging.debug("Running default action for MessageSender")
+        logging.debug("Running default_action for {}".format(self.__class__.__name__))
 
         if not invoking_task.binary:
             message_text = str(invoking_task.message)
@@ -88,6 +88,7 @@ class MessageSender(BaseSender):
         self.modem.start()
 
     def send_message(self, message, include_date=True):
+        logging.debug("Running send_message for {}".format(self.__class__.__name__))
         self.modem.send_message(Message(message, include_date=include_date))
         self.modem.start()
 
