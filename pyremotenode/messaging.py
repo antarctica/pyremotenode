@@ -10,14 +10,12 @@ import subprocess
 from datetime import datetime
 
 from pyremotenode.tasks.iridium import SBDSender
-from pyremotenode.utils.config import Configuration
 
 
 class MessageProcessor(object):
     @staticmethod
     def ingest(scheduler):
-        cfg = Configuration().config
-
+        # TODO: no need to pass scheduler unless setting up tasks, use cfg = Configuration().config
         # TODO: currently available commands, ideally the messageprocessor should gain a list of messages from a
         # pyremotenode.messages factory and individually process message headers against their abstract .header_re()
         # method
@@ -98,28 +96,28 @@ class MessageProcessor(object):
     @staticmethod
     def RunExecute(cmd_str, body, key="pyljXHFxDg58."):
         executed = False
-        result = ""
+        result = bytearray()
 
         try:
             if crypt.crypt(body.decode().strip(), 'pyremotenode') != key:
-                result += "Invalid execution key\n"
+                result += "Invalid execution key\n".encode()
             else:
-                result = subprocess.check_output(cmd_str, shell=True).decode()
+                result = subprocess.check_output(cmd_str, shell=True)
                 logging.info("Successfully executed command {}\nRESULT:\n{}".format(cmd_str, result))
                 executed = True
         except subprocess.CalledProcessError as e:
-            result = "Could not execute command: rc {}".format(e.returncode)
+            result += "Could not execute command: rc {}".format(e.returncode).encode()
             logging.exception(result)
         except UnicodeDecodeError as e:
-            result = "Could not encode return from command : {}".format(e.reason)
+            result += "Could not encode return from command : {}".format(e.reason).encode()
             logging.exception(result)
 
-        sbd = SBDSender(id='message_execute')
+        sbd = SBDSender(id='message_execute', binary=True)
         sbd.send_message(result[:1920], include_date=True)
         return executed
 
     @staticmethod
-    def RunDownload(arg_str, body):
+    def RunDownload(arg_str, body, **kwargs):
         # Format: gzipped? <filename>
         args = shlex.split(arg_str)
         filename = None

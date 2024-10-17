@@ -178,6 +178,11 @@ class ModemConnection(object):
 
             logging.info("Ready to connect to modem on {}".format(self.serial_port))
 
+        def close(self):
+            if self._data and self._data.is_open:
+                logging.debug("Closing and removing modem serial connection")
+                self._data.close()
+
         def get_iridium_system_time(self):
             with self._thread_lock:
                 logging.debug("Getting Iridium system time")
@@ -189,7 +194,7 @@ class ModemConnection(object):
                 try:
                     locked = self.modem_lock.acquire()
                     if locked:
-                        self._initialise_modem()
+                        self.initialise_modem()
 
                         # And time is measured in 90ms intervals eg. 62b95972
                         result = self._send_receive_messages("AT-MSSTM")
@@ -230,35 +235,32 @@ class ModemConnection(object):
         def run(self):
             while self._running:
                 modem_locked = False
+                num = 0
 
                 try:
                     if not self.message_queue.empty() \
                             and self.modem_lock.acquire(blocking=False):
                         modem_locked = True
 
-                        self._initialise_modem()
+                        self.initialise_modem()
 
                         if not self.message_queue.empty():
                             logging.debug("Current queue size approx.: {}".format(str(self.message_queue.qsize())))
 
-                            if self._signal_check():
+                            if self.signal_check():
                                 num = self._process_outstanding_messages()
                                 logging.info("Processed {} outgoing messages".format(num if num is not None else 0))
                             else:
                                 logging.warning("Not enough signal to perform activities")
                         logging.info("Reached end of modem usage for this iteration...")
                 except ModemConnectionException:
-                    logging.error("Out of logic modem operations, breaking to restart...")
-                    logging.error(traceback.format_exc())
+                    logging.exception("Out of logic modem operations, breaking to restart...")
                 except queue.Empty:
                     logging.info("{} messages processed, {} left in queue".format(num, self.message_queue.qsize()))
                 except Exception:
-                    logging.error("Modem inoperational or another error occurred")
-                    logging.error(traceback.format_exc())
+                    logging.exception("Modem inoperational or another error occurred")
                 finally:
-                    if self._data and self._data.is_open:
-                        logging.debug("Closing and removing modem serial connection")
-                        self._data.close()
+                    self.close()
 
                     try:
                         if modem_locked:
@@ -269,9 +271,8 @@ class ModemConnection(object):
                 logging.debug("{} thread waiting...".format(self.__class__.__name__))
                 tm.sleep(self._modem_wait)
 
-        def _initialise_modem(self):
+        def initialise_modem(self):
             """
-            _initialise_modem
 
             Opens the serial interface to the modem and performs the necessary registration
             checks for activity on the network. Raises an exception if we can't gather a
@@ -279,7 +280,7 @@ class ModemConnection(object):
 
             :return: None
             """
-            if not self._data:
+            if self._data is None:
                 logging.info("Creating pyserial comms instance to modem")
                 # Instantiation = opening of port hence why this is here and not in the constructor
                 self._data = serial.Serial(
@@ -353,7 +354,7 @@ class ModemConnection(object):
                 msg = self.message_queue.get(timeout=1)
                 try:
                     if msg[0] == self._priority_sbd_mo:
-                        self._process_sbd_message(msg[1])
+                        self.process_sbd_message(msg[1])
                     elif msg[0] == self._priority_file_mo:
                         # TODO: We need to batch file transfers together into
                         #  a single long running call
@@ -368,7 +369,7 @@ class ModemConnection(object):
 
             while self._mt_queued:
                 logging.info("Outstanding MT messages, collecting...")
-                self._process_sbd_message()
+                self.process_sbd_message()
 
         def _process_file_message(self, filename):
             """ Take a file and process it across the link via XMODEM
@@ -495,7 +496,7 @@ class ModemConnection(object):
 
         # TODO: Needs to impose a modem specific limit in length! 340 for 9603 (rockblock) and 1920 for 9522B
         # TODO: All this logic needs a rewrite, it's too dependent on MO message initiation
-        def _process_sbd_message(self, msg=None):
+        def process_sbd_message(self, msg=None):
             if msg:
                 text = msg.get_message_text()# .replace("\n", " ")
 
@@ -659,10 +660,8 @@ class ModemConnection(object):
 
             return reply
 
-        def _signal_check(self, min_signal=3):
+        def signal_check(self, min_signal=3):
             """
-            _signal_check
-
             Issue commands to the modem to evaluate the signal strength currently available
 
             :param min_signal: The minimum allowed signal for a positive result
@@ -872,3 +871,42 @@ class WakeupTask(CheckCommand):
 
         self._output = (" ".join([status, output, change])).strip()
         return self._process_cmd_output(self._output)
+
+
+class MTMessageCheck(BaseTask):
+    def __init__(self, **kwargs):
+        super(MTMessageCheck, self).__init__(**kwargs)
+
+    def default_action(self,
+                       **kwargs):
+        logging.debug("Running MTMessageCheck task")
+
+        modem = ModemConnection()
+        modem_locked = False
+
+        qsize = modem.message_queue.qsize()
+        if qsize > 0:
+            logging.info("Abandoning MTMessageCheck as queue size is > 0, qsize = {}".format(qsize))
+            return BaseTask.OK
+
+        try:
+            if modem.modem_lock.acquire(blocking=False):
+                modem_locked = True
+                modem.initialise_modem()
+
+                if modem.signal_check():
+                    modem.process_sbd_message()
+        except ModemConnectionException:
+            logging.exception("Caught a modem exception running the regular task, abandoning")
+        except Exception:
+            logging.exception("Modem inoperational or another error occurred")
+        finally:
+            modem.close()
+
+            try:
+                if modem_locked:
+                    modem.modem_lock.release()
+            except RuntimeError:
+                logging.warning("Looks like the lock wasn't acquired, dealing with this...")
+
+        return BaseTask.OK
