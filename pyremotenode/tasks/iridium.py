@@ -182,7 +182,7 @@ class ModemConnection(object):
             if self._data and self._data.is_open:
                 logging.debug("Closing and removing modem serial connection")
                 self._data.close()
-                self._data = None
+            self._data = None
 
         def get_iridium_system_time(self):
             with self._thread_lock:
@@ -261,13 +261,13 @@ class ModemConnection(object):
                 except Exception:
                     logging.exception("Modem inoperational or another error occurred")
                 finally:
-                    self.close()
+                    if modem_locked:
+                        self.close()
 
-                    try:
-                        if modem_locked:
+                        try:
                             self.modem_lock.release()
-                    except RuntimeError:
-                        logging.warning("Looks like the lock wasn't acquired, dealing with this...")
+                        except RuntimeError:
+                            logging.warning("Looks like the lock wasn't acquired, dealing with this...")
 
                 logging.debug("{} thread waiting...".format(self.__class__.__name__))
                 tm.sleep(self._modem_wait)
@@ -602,7 +602,7 @@ class ModemConnection(object):
             blocks) may contain numerous newlines, and hence read() must be used (with an excessive upper limit; the
             maximum message size is ~2000 bytes), returning at the end of the configured timeout - make sure it is long enough!
             """
-            if not self._data.isOpen():
+            if self._data is None or not self._data.is_open:
                 raise ModemConnectionException('Cannot send message; data port is not open')
             self._data.flushInput()
             self._data.flushOutput()
@@ -896,21 +896,23 @@ class MTMessageCheck(BaseTask):
         try:
             if modem.modem_lock.acquire(blocking=False):
                 modem_locked = True
+                logging.debug("Running MTMessageCheck initialisation")
                 modem.initialise_modem()
 
                 if modem.signal_check():
+                    logging.debug("Running MTMessageCheck processing")
                     modem.process_sbd_message()
         except ModemConnectionException:
             logging.exception("Caught a modem exception running the regular task, abandoning")
         except Exception:
             logging.exception("Modem inoperational or another error occurred")
         finally:
-            modem.close()
+            if modem_locked:
+                modem.close()
 
-            try:
-                if modem_locked:
+                try:
                     modem.modem_lock.release()
-            except RuntimeError:
-                logging.warning("Looks like the lock wasn't acquired, dealing with this...")
+                except RuntimeError:
+                    logging.warning("Looks like the lock wasn't acquired, dealing with this...")
 
         return BaseTask.OK
