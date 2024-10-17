@@ -182,6 +182,7 @@ class ModemConnection(object):
             if self._data and self._data.is_open:
                 logging.debug("Closing and removing modem serial connection")
                 self._data.close()
+                self._data = None
 
         def get_iridium_system_time(self):
             with self._thread_lock:
