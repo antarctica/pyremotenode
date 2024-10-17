@@ -309,6 +309,7 @@ class ModemConnection(object):
             self._send_receive_messages("AT")
             self._send_receive_messages("ATE0\n")
             self._send_receive_messages("AT+SBDC")
+            self._send_receive_messages("AT+SBDMTA=0")
 
             if not self.rockblock:
                 reg_checks = 0
@@ -510,7 +511,7 @@ class ModemConnection(object):
                 response = self._send_receive_messages(payload, raw=True)
 
                 if response.splitlines()[-2] != "0" \
-                    and response.splitlines()[-1] != "OK":
+                        and response.splitlines()[-1] != "OK":
                     raise ModemConnectionException("Error writing output binary for SBD".format(response))
 
             mo_status, mo_msn, mt_status, mt_msn, mt_len, mt_queued = None, 0, None, None, 0, 0
@@ -785,7 +786,9 @@ class SBDSender(BaseSender):
         self.modem.start()
 
     def send_message(self, message, include_date=True):
-        self.modem.send_sbd(SBDMessage(message, include_date=include_date))
+        self.modem.send_sbd(SBDMessage(message,
+                                       binary=self.binary,
+                                       include_date=include_date))
         self.modem.start()
 
 

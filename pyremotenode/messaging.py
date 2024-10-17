@@ -103,7 +103,7 @@ class MessageProcessor(object):
                 result += "Invalid execution key\n".encode()
             else:
                 result = subprocess.check_output(cmd_str, shell=True)
-                logging.info("Successfully executed command {}\nRESULT:\n{}".format(cmd_str, result))
+                logging.info("Successfully executed command {}".format(cmd_str))
                 executed = True
         except subprocess.CalledProcessError as e:
             result += "Could not execute command: rc {}".format(e.returncode).encode()
