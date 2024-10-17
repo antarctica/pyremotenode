@@ -14,7 +14,7 @@ setup(
         "run_pyremotenode",
     ],
     include_package_data = True,
-    version = '0.5.0a2-lpm',
+    version = '0.6.0a3-lpm-certus',
     author = 'James Byrne',
     author_email = 'jambyr@bas.ac.uk',
     url = 'http://www.github.com/antarctica/pyremotenode',
