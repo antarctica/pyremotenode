@@ -100,6 +100,11 @@ class BaseConnection(metaclass=ABCMeta):
 
         logging.debug("Creating {}".format(self.__class__.__name__))
 
+    def close(self):
+        if self.data_conn and self.data_conn.is_open:
+            logging.debug("Closing and removing modem serial connection")
+            self.data_conn.close()
+
     @abstractmethod
     def get_system_time(self):
         raise NotImplementedError("get_system_time not implemented")
@@ -153,7 +158,7 @@ class BaseConnection(metaclass=ABCMeta):
         blocks) may contain numerous newlines, and hence read() must be used (with an excessive upper limit; the
         maximum message size is ~2000 bytes), returning at the end of the configured timeout - make sure it is long enough!
         """
-        if not self.data_conn.isOpen():
+        if self.data_conn is None or not self.data_conn.is_open:
             raise ConnectionException('Cannot send message; data port is not open')
         self.data_conn.flushInput()
         self.data_conn.flushOutput()
@@ -331,15 +336,13 @@ class BaseConnection(metaclass=ABCMeta):
                 logging.error("Modem inoperational or another error occurred")
                 logging.error(traceback.format_exc())
             finally:
-                if self.data_conn and self.data_conn.is_open:
-                    logging.debug("Closing and removing modem serial connection")
-                    self.data_conn.close()
+                if modem_locked:
+                    self.close()
 
-                try:
-                    if modem_locked:
+                    try:
                         self.modem_lock.release()
-                except RuntimeError:
-                    logging.warning("Looks like the lock wasn't acquired, dealing with this...")
+                    except RuntimeError:
+                        logging.warning("Looks like the lock wasn't acquired, dealing with this...")
 
             logging.debug("{} thread waiting...".format(self.__class__.__name__))
             tm.sleep(self._modem_wait)

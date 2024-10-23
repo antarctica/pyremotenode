@@ -13,14 +13,13 @@ setup(
     scripts=[
         "run_pyremotenode",
     ],
-    include_package_data = True,
-    version = '0.6.0a3-lpm-certus',
-    author = 'James Byrne',
-    author_email = 'jambyr@bas.ac.uk',
-    url = 'http://www.github.com/antarctica/pyremotenode',
+    include_package_data=True,
+    version="0.6.0a4",
+    author="James Byrne",
+    author_email="digitalinnovation@bas.ac.uk",
+    url='http://www.github.com/antarctica/pyremotenode',
     install_requires=[
-        # TODO: need to sort this out, comes from jimcircadian/apscheduler for python3.2 compatibility
-        "apscheduler==3.0.8",
+        "apscheduler",
         "pyserial",
         "pytz",
         "xmodem",

@@ -89,7 +89,9 @@ class MessageSender(BaseSender):
 
     def send_message(self, message, include_date=True):
         logging.debug("Running send_message for {}".format(self.__class__.__name__))
-        self.modem.send_message(Message(message, include_date=include_date))
+        self.modem.send_message(Message(message,
+                                        binary=self.binary,
+                                        include_date=include_date))
         self.modem.start()
 
     @property

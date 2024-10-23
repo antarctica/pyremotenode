@@ -123,6 +123,7 @@ class RudicsConnection(BaseConnection):
         self.modem_command("AT")
         self.modem_command("ATE0\n")
         self.modem_command("AT+SBDC")
+        self.modem_command("AT+SBDMTA=0")
 
         if not self.rockblock:
             reg_checks = 0
@@ -462,7 +463,7 @@ class CertusConnection(BaseConnection):
             raise ConnectionException("{} can only be used with {}, but we got {}".
                                       format(self.__class__.__name__, " or ".join(devices), device))
 
-        # TODO: https://docs.rockremote.io/serial-raw-imt#status-of-mt-imt
+        # TODO: https://docs.rockremote.io/serial-interface#status-of-mt-imt
         #  this will need to be run periodically as here we switch off unsolicited messages
         # TODO: handle unsolicited messages and avoid turning them off
         reply = self.modem_command("AT+UNS=0")
