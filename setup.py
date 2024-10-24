@@ -1,28 +1,21 @@
-from setuptools import setup
+from setuptools import setup, find_packages
+
+with open("requirements.txt") as fh:
+    reqs = fh.read().splitlines()
 
 setup(
-    name = 'pyremotenode',
-    packages = [
-        'pyremotenode.tasks',
-        'pyremotenode.utils',
-        'pyremotenode'
-    ],
-    package_data = {"": [
+    name='pyremotenode',
+    packages=find_packages(),
+    package_data={"": [
         "run_pyremotenode",
     ]},
     scripts=[
         "run_pyremotenode",
     ],
     include_package_data=True,
-    version="0.6.0a4",
+    version="0.6.0a5",
     author="James Byrne",
     author_email="digitalinnovation@bas.ac.uk",
     url='http://www.github.com/antarctica/pyremotenode',
-    install_requires=[
-        "apscheduler",
-        "pyserial",
-        "pytz",
-        "xmodem",
-        "pynmea2"
-    ]
+    install_requires=reqs
 )

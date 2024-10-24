@@ -171,6 +171,47 @@ class Message:
         return self.datetime < other.datetime
 
 
+class MTMessageCheck(BaseTask):
+    def __init__(self, **kwargs):
+        super(MTMessageCheck, self).__init__(**kwargs)
+
+    def default_action(self,
+                       **kwargs):
+        logging.debug("Running MTMessageCheck task")
+
+        modem = ModemConnection()
+        modem_locked = False
+
+        qsize = modem.message_queue.qsize()
+        if qsize > 0:
+            logging.info("Abandoning MTMessageCheck as queue size is > 0, qsize = {}".format(qsize))
+            return BaseTask.OK
+
+        try:
+            if modem.modem_lock.acquire(blocking=False):
+                modem_locked = True
+                logging.debug("Running MTMessageCheck initialisation")
+                modem.initialise_modem()
+
+                if modem.signal_check():
+                    logging.debug("Running MTMessageCheck processing")
+                    modem.process_sbd_message()
+        except ModemConnectionException:
+            logging.exception("Caught a modem exception running the regular task, abandoning")
+        except Exception:
+            logging.exception("Modem inoperational or another error occurred")
+        finally:
+            if modem_locked:
+                modem.close()
+
+                try:
+                    modem.modem_lock.release()
+                except RuntimeError:
+                    logging.warning("Looks like the lock wasn't acquired, dealing with this...")
+
+        return BaseTask.OK
+
+
 class WakeupTask(CheckCommand):
     def __init__(self, **kwargs):
         BaseTask.__init__(self, **kwargs)

@@ -64,22 +64,22 @@ class MessageProcessor:
                     MessageProcessor.move_to(msg_file, "invalid_header")
                     continue
 
-                command = "run_{}".format(command)
+                command = "run_{}".format(command.lower())
 
                 try:
-                    func = getattr(MessageProcessor, "{}".format(command))
+                    func = getattr(self, "{}".format(command))
                 except AttributeError:
                     logging.exception("No command available: {}".format(command))
-                    MessageProcessor.move_to(msg_file, "invalid_header")
+                    self.move_to(msg_file, "invalid_header")
                     continue
 
                 if func(arg_str, msg_body):
-                    MessageProcessor.move_to(msg_file)
+                    self.move_to(msg_file)
                 else:
-                    MessageProcessor.move_to(msg_file, "cmd_failed")
+                    self.move_to(msg_file, "cmd_failed")
             except Exception:
                 logging.exception("Problem encountered processing message {}".format(msg_file))
-                MessageProcessor.move_to(msg_file, "failed")
+                self.move_to(msg_file, "failed")
 
     def move_to(self, msg, reason="processed"):
         try:
@@ -95,27 +95,27 @@ class MessageProcessor:
 
     def run_execute(self, cmd_str, body, key="pyljXHFxDg58."):
         executed = False
-        result = ""
+        result = bytearray()
 
         try:
             if crypt.crypt(body.decode().strip(), 'pyremotenode') != key:
-                result += "Invalid execution key\n"
+                result += "Invalid execution key\n".encode()
             else:
-                result = subprocess.check_output(cmd_str, shell=True).decode()
+                result = subprocess.check_output(cmd_str, shell=True)
                 logging.info("Successfully executed command {}".format(cmd_str))
                 executed = True
         except subprocess.CalledProcessError as e:
-            result = "Could not execute command: rc {}".format(e.returncode)
+            result = "Could not execute command: rc {}".format(e.returncode).encode()
             logging.exception(result)
         except UnicodeDecodeError as e:
-            result = "Could not encode return from command : {}".format(e.reason)
+            result = "Could not encode return from command : {}".format(e.reason).encode()
             logging.exception(result)
 
-        sbd = self._sender(id='message_execute')
+        sbd = self._sender(id="message_execute", binary=True)
         sbd.send_message("\n{}".format(result), include_date=True)
         return executed
 
-    def run_download(self, arg_str, body):
+    def run_download(self, arg_str, body, **kwargs):
         # Format: gzipped? <filename>
         args = shlex.split(arg_str)
         filename = None
@@ -172,6 +172,6 @@ class MessageProcessor:
             result.append(msg)
             logging.info(msg)
 
-        sbd = SBDSender(id='message_download')
+        sbd = self._sender(id='message_download', binary=True)
         sbd.send_message("\n{}".format(result), include_date=True)
         return downloaded

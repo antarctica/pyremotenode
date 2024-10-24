@@ -212,8 +212,8 @@ class BaseConnection(metaclass=ABCMeta):
 
         if dont_decode:
             logging.info("Response of {} bytes received".format(bytes_read))
-            with open("test2.{}.msg".format(bytes_read), "wb") as fh:
-                fh.write(reply)
+            # with open("test2.{}.msg".format(bytes_read), "wb") as fh:
+            #    fh.write(reply)
         else:
             reply = reply.decode().strip()
             logging.info('Response received: "{}"'.format(reply))

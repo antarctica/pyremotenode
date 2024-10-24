@@ -11,7 +11,15 @@ from pyremotenode.utils.system import background_fork
 
 if __name__ == '__main__':
     # Don't use anything here that initiates the logging root handler
-    a = argparse.ArgumentParser()
+    a = argparse.ArgumentParser(usage="""
+        If you're trying to run for debugging / coding
+        
+        try...
+        
+        run_pyremotenode -l logs/ -n -np -v configurations/certus.test.cfg
+        
+        or somesuch! Ctrl-C will kill the scheduler. Good luck! 
+    """)
     a.add_argument("config", help="Configuration to use for running remote node")
     # TODO: Naming of service as a parameter...
     a.add_argument("--log-dir", "-l", help="Log directory",

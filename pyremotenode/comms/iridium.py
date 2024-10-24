@@ -446,7 +446,7 @@ class CertusConnection(BaseConnection):
         return crc & 0xffff
 
     def get_system_time(self):
-        pass
+        return None
 
     def initialise_modem(self):
         super().initialise_modem()
