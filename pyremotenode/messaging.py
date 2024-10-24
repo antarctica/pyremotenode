@@ -50,7 +50,7 @@ class MessageProcessor:
 
                 if not header_match:
                     logging.warning("Don't understand directives in {}".format(msg_file))
-                    MessageProcessor.move_to(msg_file, "invalid_header")
+                    self.move_to(msg_file, "invalid_header")
                     continue
 
                 (command, arg_str) = header_match.groups()
@@ -61,7 +61,7 @@ class MessageProcessor:
                     arg_str = arg_str.decode()
                 except UnicodeDecodeError:
                     logging.exception("Could not decode header information for command")
-                    MessageProcessor.move_to(msg_file, "invalid_header")
+                    self.move_to(msg_file, "invalid_header")
                     continue
 
                 command = "run_{}".format(command.lower())
