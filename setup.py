@@ -13,7 +13,7 @@ setup(
         "run_pyremotenode",
     ],
     include_package_data=True,
-    version="0.6.0a8",
+    version="0.6.0a9",
     author="James Byrne",
     author_email="digitalinnovation@bas.ac.uk",
     url='http://www.github.com/antarctica/pyremotenode',

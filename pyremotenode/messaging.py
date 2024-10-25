@@ -112,7 +112,7 @@ class MessageProcessor:
             logging.exception(result)
 
         sbd = self._sender(id="message_execute", binary=True)
-        sbd.send_message("\n{}".format(result), include_date=True)
+        sbd.send_message(result, include_date=True)
         return executed
 
     def run_download(self, arg_str, body, **kwargs):
