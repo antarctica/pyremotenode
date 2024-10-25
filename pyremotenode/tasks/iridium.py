@@ -110,7 +110,7 @@ class IMTSender(MessageSender):
                  class_type=pyremotenode.comms.iridium.CertusConnection,
                  critical=False,
                  include_date=False,
-                 message_length=100 * 1024,
+                 message_length=100000,
                  warning=False,
                  **kwargs):
         super().__init__(
@@ -118,7 +118,7 @@ class IMTSender(MessageSender):
             class_type=pyremotenode.comms.iridium.CertusConnection,
             critical=critical,
             include_date=False,
-            message_length=90 * 1024,
+            message_length=100000,
             warning=warning,
             **kwargs)
 
