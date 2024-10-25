@@ -118,7 +118,7 @@ class IMTSender(MessageSender):
             class_type=pyremotenode.comms.iridium.CertusConnection,
             critical=critical,
             include_date=False,
-            message_length=100 * 1024,
+            message_length=90 * 1024,
             warning=warning,
             **kwargs)
 
@@ -152,7 +152,7 @@ class Message:
 
     def get_message_text(self):
         if self._binary:
-            logging.info("Returning binary message: {} bytes".format(len(self._msg)))
+            logging.info("Got binary message: {} bytes (MAX: {})".format(len(self._msg), self._max_length))
             return self._msg if self._max_length is None else self._msg[:self._max_length]
 
         if self._include_dt:

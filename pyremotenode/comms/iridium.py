@@ -514,7 +514,10 @@ class CertusConnection(BaseConnection):
             text = msg.get_message_text()
 
             response = self.modem_command("AT+IMTWB={}".format(len(text)))
-            if not response.splitlines()[-1].strip().endswith("READY"):
+            if response.startswith("+IMTWB ERROR: 2"):
+                logging.warning("Message is too big")
+                return True
+            elif not response.splitlines()[-1].strip().endswith("READY"):
                 raise ConnectionException("Error preparing for binary message: {}".format(response))
 
             payload = text.encode() if not msg.binary else text
