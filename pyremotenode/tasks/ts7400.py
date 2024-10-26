@@ -7,7 +7,8 @@ import subprocess as sp
 import time
 
 from datetime import datetime, timedelta
-from pyremotenode.tasks import BaseTask, ModemConnection
+from pyremotenode.tasks import BaseTask
+from pyremotenode.comms.base import ModemConnection
 
 
 class Sleep(BaseTask):

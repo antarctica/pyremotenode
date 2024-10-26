@@ -97,6 +97,7 @@ class Scheduler(object):
 
         try:
             with pid_file(self._pid):
+                msg_processor = MessageProcessor(self._cfg)
                 self._running = True
 
                 self._schedule.print_jobs()
@@ -105,7 +106,7 @@ class Scheduler(object):
                 while self._running:
                     try:
                         tm.sleep(int(hk_sleep))
-                        MessageProcessor.ingest(self)
+                        msg_processor.ingest()
                     except Exception:
                         logging.exception("Error in main thread, something very wrong, schedule will continue...")
         finally:
@@ -165,13 +166,15 @@ class Scheduler(object):
         for idx, cfg in enumerate(self._cfg['actions']):
             logging.debug("Configuring action instance {0}: type {1}".format(idx, cfg['task']))
             action = SchedulerAction(cfg)
+            args = dict() if 'args' not in cfg else cfg['args']
             obj = TaskInstanceFactory.get_item(
                 id=cfg['id'],
                 scheduler=self,
                 task=cfg['task'],
-                **cfg['args'])
+                **args)
 
-            # TODO: Do we want to retain the processing order past here? It is not a logic driver so no is my inclination
+            # TODO: Do we want to retain the processing order past here?
+            #  It is not a logic driver so no is my inclination
             self._schedule_action_instances[cfg['id']] = action
             self._schedule_task_instances[cfg['id']] = obj
 
@@ -249,7 +252,8 @@ class Scheduler(object):
     def _plan_schedule_task(self, until, action):
         logging.debug("Got item {0}".format(action))
         timings = []
-        cron_args = ('year','minute','day','week','day_of_week','hour','minute','second','start_date','end_date')
+        cron_args = ('year', 'month', 'day', 'week', 'day_of_week', 'hour',
+                     'minute', 'second', 'start_date', 'end_date')
 
         # NOTE: Copy this before changing, or when passing!
         kwargs = action['args']

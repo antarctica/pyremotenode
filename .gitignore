@@ -12,3 +12,4 @@ __pycache__
 /scratch/
 /venv/
 scratch.txt
+/*.msg
