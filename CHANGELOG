@@ -1,12 +1,19 @@
-0.6.0
+High level changelog, please review github.com/antarctica/pyremotenode for more
+information regarding changes, such as specific issues and commit diffs.
+
+Sorry there's not more detailed information here!
+
+
+0.6.1
 -----
 
+
+0.6.0
+-----
 * Certus operations stable and complete
 * First release to PyPI
 
 0.5.0
 -----
-
 * Transfer from gitlab @ BAS
 * SBD operation stable and complete
-
