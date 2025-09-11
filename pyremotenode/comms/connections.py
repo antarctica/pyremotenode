@@ -273,14 +273,17 @@ class BaseConnection(metaclass=ABCMeta):
         while not self.message_queue.empty():
             msg = self.message_queue.get(timeout=1)
             try:
+                ret = False
+
                 if msg[0] == self.priority_message_mo:
-                    self.process_message(msg[1])
+                    ret = self.process_message(msg[1])
                 elif msg[0] == self.priority_file_mo:
-                    # TODO: We need to batch file transfers together into
-                    #  a single long running call
-                    self.process_transfer(msg[1])
+                    ret = self.process_transfer(msg[1])
                 else:
                     raise ConnectionException("Invalid message type submitted {}".format(msg[0]))
+
+                if not ret:
+                    logging.warning("Message process method returned false for some reason")
             except ConnectionException:
                 # TODO: We need to put this back at the start of the queue, not the end...
                 logging.warning("Failed message handling, putting back to the queue...")

@@ -11,6 +11,7 @@ import serial
 import xmodem
 
 from pyremotenode.comms.connections import BaseConnection, ConnectionException
+from pyremotenode.tasks.iridium import IMTSender
 
 
 class RudicsConnection(BaseConnection):
@@ -532,6 +533,38 @@ class CertusConnection(BaseConnection):
         return True
 
     def process_transfer(self, filename):
-        pass
+        if not os.path.exists("{} does not exist, we will not try and send it".format(filename)):
+            return False
 
+        sender = IMTSender()
+        file_length = os.stat(filename)[stat.ST_SIZE]
+        file_basename = os.path.basename(filename).encode("latin-1")[:255]
+        length = len(file_basename)
 
+        header = bytearray()
+        header += struct.pack("!iB{}sLLL".format(length),
+                              binascii.crc32(file_basename) & 0xffff,
+                              length,
+                              file_basename,
+                              file_length, 0, 0)
+
+        continuation = bytearray()
+        continuation += struct.pack("!iLLL",
+                                    binascii.crc32(file_basename) & 0xffff,
+                                    file_length, 0, 0)
+
+        chunks = list()
+        while sum(chunks) < file_length:
+            chunks.append(sender.message_length - (len(header) if len(chunks) == 0 else len(continuation)))
+        logging.debug("Calculated chunks of length: {}".format(", ".join([str(c) for c in chunks])))
+
+        with open(filename, "rb") as fh:
+            for i, chunk in enumerate(chunks):
+                message_header = header if i == 0 else continuation
+                file_data = fh.read(chunk)
+                start = sum(chunks[:i])
+                end = min(sum(chunks[:i])+chunk, file_length)
+                logging.debug("Sending {} bytes from {} between {} and {}".format(
+                    len(file_data), filename, start, end))
+                message_header[-struct.calcsize("!LL"):] = struct.pack("!LL", start, end)
+                sender.send_message(message_header + file_data)
