@@ -11,7 +11,6 @@ import serial
 import xmodem
 
 from pyremotenode.comms.connections import BaseConnection, ConnectionException
-from pyremotenode.tasks.iridium import IMTSender
 
 
 class RudicsConnection(BaseConnection):
@@ -536,7 +535,6 @@ class CertusConnection(BaseConnection):
         if not os.path.exists("{} does not exist, we will not try and send it".format(filename)):
             return False
 
-        sender = IMTSender()
         file_length = os.stat(filename)[stat.ST_SIZE]
         file_basename = os.path.basename(filename).encode("latin-1")[:255]
         length = len(file_basename)
@@ -555,7 +553,7 @@ class CertusConnection(BaseConnection):
 
         chunks = list()
         while sum(chunks) < file_length:
-            chunks.append(sender.message_length - (len(header) if len(chunks) == 0 else len(continuation)))
+            chunks.append(99998 - (len(header) if len(chunks) == 0 else len(continuation)))
         logging.debug("Calculated chunks of length: {}".format(", ".join([str(c) for c in chunks])))
 
         with open(filename, "rb") as fh:
@@ -567,4 +565,21 @@ class CertusConnection(BaseConnection):
                 logging.debug("Sending {} bytes from {} between {} and {}".format(
                     len(file_data), filename, start, end))
                 message_header[-struct.calcsize("!LL"):] = struct.pack("!LL", start, end)
-                sender.send_message(message_header + file_data)
+
+                message = message_header + file_data
+                response = self.modem_command("AT+IMTWB={}".format(len(message)))
+                if response.startswith("+IMTWB ERROR: 2"):
+                    logging.warning("Message is too big")
+                    return True
+                elif not response.splitlines()[-1].strip().endswith("READY"):
+                    raise ConnectionException("Error preparing for binary message: {}".format(response))
+
+                message += CertusConnection.calculate_crc16(message).to_bytes(2, "big")
+                response = self.modem_command(message, raw=True)
+
+                if response.splitlines()[-1] != "OK":
+                    raise ConnectionException("Error writing output binary for Certus".format(response))
+                message_id = response.splitlines()[0].split(":")[1]
+                logging.info("Sent {} bytes with message ID {}".format(len(message), message_id))
+
+        # TODO: store filename
