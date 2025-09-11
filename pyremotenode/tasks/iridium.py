@@ -8,7 +8,6 @@ import pyremotenode.comms.iridium
 from pyremotenode.comms.base import ModemConnection, ModemConnectionException
 from pyremotenode.tasks import BaseTask
 from pyremotenode.tasks.utils import CheckCommand
-from pyremotenode.utils.config import Configuration
 
 
 class BaseSender(BaseTask):
