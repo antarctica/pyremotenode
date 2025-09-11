@@ -9,12 +9,6 @@ with open("README.md") as fh:
 setup(
     name='pyremotenode',
     packages=find_packages(),
-    package_data={"": [
-        "run_pyremotenode",
-    ]},
-    scripts=[
-        "run_pyremotenode",
-    ],
     include_package_data=True,
     version="0.6.1a0",
     author="James Byrne",
@@ -43,10 +37,16 @@ setup(
         "Topic :: Scientific/Engineering",
         "Topic :: Software Development :: Embedded Systems",
     ],
+    entry_points={
+        "console_scripts": [
+            "run_pyremotenode = pyremotenode.cli:main",
+        ]
+    },
     extras_require={
         'docs': [],
         'test': ['pytest>3,<6']
     },
+    tests_require=['pytest>3,<6'],
     test_suite='tests',
     url='http://www.github.com/antarctica/pyremotenode',
     install_requires=reqs

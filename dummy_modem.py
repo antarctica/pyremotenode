@@ -1,11 +1,8 @@
 import argparse
-import datetime
 import logging
 import os
 import re
-import sys
 import time
-import xmodem
 
 from subprocess import Popen, PIPE
 from threading import Thread
@@ -179,6 +176,7 @@ class RudicsMODummyConnection(object):
 
 class SocatException(Exception):
     pass
+
 
 if __name__ == '__main__':
     a = argparse.ArgumentParser()

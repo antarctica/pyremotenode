@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 import logging
 import os
@@ -9,15 +7,16 @@ from pyremotenode.schedule import Scheduler
 from pyremotenode.utils import Configuration, setup_logging
 from pyremotenode.utils.system import background_fork
 
-if __name__ == '__main__':
+
+def main():
     # Don't use anything here that initiates the logging root handler
     a = argparse.ArgumentParser(usage="""
         If you're trying to run for debugging / coding
-        
+
         try...
-        
+
         run_pyremotenode -l logs/ -n -np -v configurations/certus.test.cfg
-        
+
         or somesuch! Ctrl-C will kill the scheduler. Good luck! 
     """)
     a.add_argument("config", help="Configuration to use for running remote node")
@@ -50,7 +49,7 @@ if __name__ == '__main__':
     setup_logging("{}".format(os.path.basename(args.config)),
                   logdir=args.log_dir,
                   verbose=args.verbose)
-    
+
     Configuration.check_file(args.config)
     cfg = Configuration(args.config).config
 
