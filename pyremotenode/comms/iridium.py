@@ -535,6 +535,15 @@ class CertusConnection(BaseConnection):
         if not os.path.exists("{} does not exist, we will not try and send it".format(filename)):
             return False
 
+        cache_name = "filesender.cache"
+
+        with open(cache_name, "r") as fs:
+            previous_files = fs.readlines()
+
+        if filename in previous_files:
+            logging.debug("Not file sending {} as it's in the cache already".format(filename))
+            return True
+        
         file_length = os.stat(filename)[stat.ST_SIZE]
         file_basename = os.path.basename(filename).encode("latin-1")[:255]
         length = len(file_basename)
@@ -582,4 +591,5 @@ class CertusConnection(BaseConnection):
                 message_id = response.splitlines()[0].split(":")[1]
                 logging.info("Sent {} bytes with message ID {}".format(len(message), message_id))
 
-        # TODO: store filename
+        with open(cache_name, "w") as fs:
+            fs.write("{}\n".format(filename))
