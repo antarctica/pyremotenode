@@ -543,7 +543,7 @@ class CertusConnection(BaseConnection):
         if filename in previous_files:
             logging.debug("Not file sending {} as it's in the cache already".format(filename))
             return True
-        
+
         file_length = os.stat(filename)[stat.ST_SIZE]
         file_basename = os.path.basename(filename).encode("latin-1")[:255]
         length = len(file_basename)

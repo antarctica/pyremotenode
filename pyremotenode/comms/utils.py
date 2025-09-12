@@ -5,6 +5,7 @@ import threading as t
 import time as tm
 from datetime import datetime
 
+from pyremotenode.comms.base import ModemConnectionException
 from pyremotenode.utils import Configuration
 
 
@@ -16,8 +17,12 @@ class ModemLock(object):
         self.grace_period = int(cfg['ModemConnection']['grace_period']) \
             if 'grace_period' in cfg['ModemConnection'] else 3
 
-        self._modem_power = cfg['ModemConnection']['modem_power_dio'] \
-            if 'modem_power_dio' in cfg['ModemConnection'] else None
+        if 'modem_power_dio' in cfg['ModemConnection']:
+            raise ModemConnectionException("modem_power_dio is no longer used, please "
+                                           "replace with modem_power_(on|off) commands")
+
+        self._modem_power_on = cfg['ModemConnection']['modem_power_on'] if 'modem_power_on' in cfg['ModemConnection'] else None
+        self._modem_power_off = cfg['ModemConnection']['modem_power_off'] if 'modem_power_off' in cfg['ModemConnection'] else None
 
         self.offline_start = cfg['ModemConnection']['offline_start'] \
             if 'offline_start' in cfg['ModemConnection'] else None
@@ -34,12 +39,10 @@ class ModemLock(object):
 
         if res:
             rc = 0
-            # TODO: modem_power_dio is TS7400 specific - abstract tshwctl handling
-            if self._modem_power is not None:
-                logging.info("Switching on modem {}".format(self._modem_power))
-                cmd = "tshwctl --setdio {}".format(self._modem_power)
-                rc = subprocess.call(shlex.split(cmd))
-                logging.debug("tshwctl returned: {}".format(rc))
+            if self._modem_power_on is not None:
+                logging.info("Switching on modem {}".format(self._modem_power_on))
+                rc = subprocess.call(shlex.split(self._modem_power_on))
+                logging.debug("Modem on rc: {}".format(rc))
 
             if rc != 0:
                 logging.warning("Non-zero acquisition command return value, releasing the lock!")
@@ -50,11 +53,11 @@ class ModemLock(object):
         return res
 
     def release(self):
-        if self._modem_power is not None:
-            logging.info("Switching off modem {}".format(self._modem_power))
-            cmd = "tshwctl --clrdio {}".format(self._modem_power)
-            rc = subprocess.call(shlex.split(cmd))
-            logging.debug("tshwctl returned: {}".format(rc))
+        if self._modem_power_off is not None:
+            logging.info("Switching off modem {}".format(self._modem_power_off))
+            rc = subprocess.call(shlex.split(self._modem_power_off))
+            logging.debug("Modem off rc: {}".format(rc))
+
             # This doesn't need to be configurable, the DIO will be instantly switched off so we'll just give it a
             # second or two to avoid super-quick turnaround
             tm.sleep(2)
