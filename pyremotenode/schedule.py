@@ -79,7 +79,7 @@ class Scheduler(object):
 
         try:
             ret = subprocess.check_output(
-                args=shlex.split(" ".join(self.settings["wakeup_script"])),
+                args=shlex.split(self.settings["wakeup_script"]),
                 universal_newlines=True)
         except subprocess.CalledProcessError as e:
             logging.warning("Got error code {0} and message: {1}".format(e.returncode, e.output))
