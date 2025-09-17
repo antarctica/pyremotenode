@@ -1,7 +1,7 @@
 
 import logging
 
-from pyremotenode.comms.iridium import RudicsConnection, CertusConnection
+import pyremotenode.comms.iridium
 from pyremotenode.utils import Configuration
 
 # TODO: We need to implement a shared key security system on the web-exposed service
@@ -17,9 +17,9 @@ class ModemConnection:
         if not ModemConnection._instance:
             cfg = Configuration().config
 
-            impl = RudicsConnection \
+            impl = pyremotenode.comms.iridium.RudicsConnection \
                 if "type" not in cfg["ModemConnection"] or cfg["ModemConnection"]["type"] != "certus" \
-                else CertusConnection
+                else pyremotenode.comms.iridium.CertusConnection
             logging.debug("ModemConnection instantiation")
             ModemConnection._instance = impl(cfg)
         else:
