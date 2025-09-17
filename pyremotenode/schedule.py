@@ -1,6 +1,8 @@
 import logging
 import os
+import shlex
 import signal
+import subprocess
 import time as tm
 import sys
 
@@ -63,20 +65,26 @@ class Scheduler(object):
         self._configure_signals()
         self._configure_instances()
 
-        if self._start_when_fail or self.initial_checks():
+        if self._start_when_fail or self.wakeup_task():
             self._plan_schedule()
         else:
             raise ScheduleRunError("Failed on an unhealthy initial check, avoiding scheduler startup...")
 
-    def initial_checks(self):
+    def wakeup_task(self):
         """
-        Run checks labelled with on_start
-        TODO: How do we execute arbitary actions via the same mechanism as apscheduler?
+        Run an arbitrary script at startup, as root
 
         :return: Boolean for initial checks are successful
         """
-        for action in ['on_start' in cfg and cfg['on_start'] for cfg in self._cfg['actions']]:
-            pass
+
+        try:
+            ret = subprocess.check_output(
+                args=shlex.split(" ".join(self.settings["wakeup_script"])),
+                universal_newlines=True)
+        except subprocess.CalledProcessError as e:
+            logging.warning("Got error code {0} and message: {1}".format(e.returncode, e.output))
+        else:
+            logging.info("wakeup_script returned {}".format(ret))
         return True
 
     def run(self):
