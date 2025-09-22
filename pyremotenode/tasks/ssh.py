@@ -3,7 +3,7 @@ import re
 import shlex
 import subprocess
 
-from pyremotenode.tasks import BaseTask
+from pyremotenode.tasks.base import BaseTask
 
 
 class SshTunnel(BaseTask):

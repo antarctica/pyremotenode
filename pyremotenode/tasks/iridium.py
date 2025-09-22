@@ -6,8 +6,8 @@ from datetime import datetime
 
 import pyremotenode.comms.iridium
 from pyremotenode.comms.base import ModemConnection, ModemConnectionException
-from pyremotenode.tasks import BaseTask
-from pyremotenode.tasks.utils import CheckCommand
+from pyremotenode.tasks.base import BaseTask
+from pyremotenode.tasks.commands import CheckCommand
 
 
 class BaseSender(BaseTask):

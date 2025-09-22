@@ -6,7 +6,7 @@ import re
 
 from datetime import datetime, timedelta, time
 from operator import itemgetter
-from pyremotenode.tasks import BaseTask
+from pyremotenode.tasks.base import BaseTask
 
 from pyremotenode.tasks.iridium import SBDSender
 

@@ -7,7 +7,7 @@ import subprocess as sp
 import time
 
 from datetime import datetime, timedelta
-from pyremotenode.tasks import BaseTask
+from pyremotenode.tasks.base import BaseTask
 from pyremotenode.comms.base import ModemConnection
 
 

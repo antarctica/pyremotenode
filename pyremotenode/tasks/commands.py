@@ -4,7 +4,7 @@ import os
 import shlex
 import subprocess
 
-from pyremotenode.tasks import BaseTask, TaskException
+from pyremotenode.tasks.base import TaskException, BaseTask
 
 RE_OUTPUT = re.compile(r'^.*(ok|warning|critical|invalid)\s*\-.+', flags=re.IGNORECASE)
 
