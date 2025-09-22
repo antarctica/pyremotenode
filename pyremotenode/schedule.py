@@ -77,14 +77,16 @@ class Scheduler(object):
         :return: Boolean for initial checks are successful
         """
 
-        try:
-            ret = subprocess.check_output(
-                args=shlex.split(self.settings["wakeup_script"]),
-                universal_newlines=True)
-        except subprocess.CalledProcessError as e:
-            logging.warning("Got error code {0} and message: {1}".format(e.returncode, e.output))
-        else:
-            logging.info("wakeup_script returned {}".format(ret))
+        if "wakeup_script" in self.settings:
+            logging.info("Wakeup script {} to be processed".format(self.settings["wakeup_script"]))
+            try:
+                ret = subprocess.check_output(
+                    args=shlex.split(self.settings["wakeup_script"]),
+                    universal_newlines=True)
+            except subprocess.CalledProcessError as e:
+                logging.warning("Got error code {0} and message: {1}".format(e.returncode, e.output))
+            else:
+                logging.info("wakeup_script returned {}".format(ret))
         return True
 
     def run(self):
