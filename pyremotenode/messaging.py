@@ -33,7 +33,7 @@ class MessageProcessor:
         if not os.path.isdir(self._source):
             logging.warning("Message source {} does not exist, creating".format(self._source))
             os.makedirs(self._source, exist_ok=True)
-            
+
         filelist = os.listdir(self._source)
         sorted_msgs = sorted([f for f in filelist if os.path.isfile(os.path.join(self._source, f))],
                              key=lambda x: datetime.strptime(x[x.index("_")+1:-4], "%d%m%Y%H%M%S"))

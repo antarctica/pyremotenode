@@ -124,7 +124,6 @@ class Scheduler(object):
 
     def stop(self):
         self._running = False
-        # TODO: Check shutdown process
         self._schedule.shutdown()
 
     def add_ok(self, job_id):

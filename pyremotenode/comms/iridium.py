@@ -535,10 +535,12 @@ class CertusConnection(BaseConnection):
         if not os.path.exists("{} does not exist, we will not try and send it".format(filename)):
             return False
 
-        cache_name = "filesender.cache"
-
-        with open(cache_name, "r") as fs:
-            previous_files = fs.readlines()
+        previous_files = list()
+        cache_name = os.path.join(os.environ["HOME"], "filesender.cache")
+        if os.path.exists(cache_name):
+            logging.debug("Opening cache {}".format(cache_name))
+            with open(cache_name, "r") as fs:
+                previous_files += [line.strip() for line in fs.readlines()]
 
         if filename in previous_files:
             logging.debug("Not file sending {} as it's in the cache already".format(filename))
@@ -546,6 +548,7 @@ class CertusConnection(BaseConnection):
 
         file_length = os.stat(filename)[stat.ST_SIZE]
         file_basename = os.path.basename(filename).encode("latin-1")[:255]
+        logging.debug("Opening {} for transfer, {} bytes long".format(file_basename, file_length))
         length = len(file_basename)
 
         header = bytearray()
