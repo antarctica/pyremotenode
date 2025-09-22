@@ -39,7 +39,8 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "run_pyremotenode = pyremotenode.cli:main",
+            "run_receiver = pyremotenode.cli:receiver_main",
+            "run_pyremotenode = pyremotenode.cli:remotenode_main",
         ]
     },
     extras_require={
