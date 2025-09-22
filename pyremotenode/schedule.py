@@ -28,7 +28,8 @@ class Scheduler(object):
         Doesn't necessarily needs to be a singleton though, just only one starts at a time...
     """
 
-    def __init__(self, configuration,
+    def __init__(self,
+                 configuration,
                  start_when_fail=False,
                  pid_file=None):
         """
@@ -170,22 +171,41 @@ class Scheduler(object):
     # ==================================================================================
 
     def _configure_instances(self):
-        logging.info("Configuring tasks from defined actions")
+        mute_config = self.settings["mute_config"] if "mute_config" in self.settings else None
+        logging.info("Configuring tasks from defined actions".format(
+            ", applying mute list from {}".format(mute_config)
+        ))
+        mute_list = list()
+        if mute_config is not None and os.path.exists(mute_config):
+            logging.debug("Opening mute configuration {}".format(mute_config))
+            with open(mute_config, "r") as fh:
+                mute_list = [line.strip() for line in fh.readlines()]
 
         for idx, cfg in enumerate(self._cfg['actions']):
-            logging.debug("Configuring action instance {0}: type {1}".format(idx, cfg['task']))
-            action = SchedulerAction(cfg)
-            args = dict() if 'args' not in cfg else cfg['args']
-            obj = TaskInstanceFactory.get_item(
-                id=cfg['id'],
-                scheduler=self,
-                task=cfg['task'],
-                **args)
+            if cfg["id"] in mute_list:
+                logging.info("Muting {} by scheduling a DummyTask with non-communicative config".format(cfg["id"]))
+                action = SchedulerAction({
+                    k: v for k, v in cfg.items()
+                    if k not in ("args", "ok", "warn", "crit", "invoke_args")
+                })
+                action["task"] = "DummyTask"
+                obj = TaskInstanceFactory.get_item(
+                    id=cfg["id"],
+                    scheduler=self,
+                    task=action["task"]
+                )
+            else:
+                logging.debug("Configuring action instance {0}: type {1}".format(idx, cfg['task']))
+                action = SchedulerAction(cfg)
+                args = dict() if 'args' not in cfg else cfg['args']
+                obj = TaskInstanceFactory.get_item(
+                    id=cfg["id"],
+                    scheduler=self,
+                    task=cfg["task"],
+                    **args)
 
-            # TODO: Do we want to retain the processing order past here?
-            #  It is not a logic driver so no is my inclination
-            self._schedule_action_instances[cfg['id']] = action
-            self._schedule_task_instances[cfg['id']] = obj
+            self._schedule_action_instances[cfg["id"]] = action
+            self._schedule_task_instances[cfg["id"]] = obj
 
     def _configure_signals(self):
         signal.signal(signal.SIGTERM, self._sig_handler)
@@ -285,7 +305,7 @@ class Scheduler(object):
             logging.debug("Scheduling interval based job")
 
             job = self._schedule.add_job(obj,
-                                   id=action['id'],
+                                   id=action["id"],
                                    trigger='interval',
                                    minutes=int(action['interval']),
                                    coalesce=True,
@@ -296,7 +316,7 @@ class Scheduler(object):
             logging.debug("Scheduling seconds based interval job")
 
             job = self._schedule.add_job(obj,
-                                   id=action['id'],
+                                   id=action["id"],
                                    trigger='interval',
                                    seconds=int(action['interval_secs']),
                                    coalesce=True,
@@ -318,7 +338,7 @@ class Scheduler(object):
                     format(action['id']))
             else:
                 job = self._schedule.add_job(obj,
-                                       id=action['id'],
+                                       id=action["id"],
                                        trigger='date',
                                        coalesce=True,
                                        max_instances=1,
@@ -331,7 +351,7 @@ class Scheduler(object):
             job_args = dict([(k, action[k]) for k in cron_args if k in action])
             logging.debug(job_args)
             job = self._schedule.add_job(obj,
-                                   id=action['id'],
+                                   id=action["id"],
                                    trigger='cron',
                                    coalesce=True,
                                    max_instances=1,
