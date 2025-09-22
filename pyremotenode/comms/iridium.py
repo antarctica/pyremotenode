@@ -532,7 +532,8 @@ class CertusConnection(BaseConnection):
         return True
 
     def process_transfer(self, filename):
-        if not os.path.exists("{} does not exist, we will not try and send it".format(filename)):
+        if not os.path.exists(filename):
+            logging.warning("{} does not exist, we will not try and send it".format(filename))
             return False
 
         previous_files = list()
@@ -565,7 +566,8 @@ class CertusConnection(BaseConnection):
 
         chunks = list()
         while sum(chunks) < file_length:
-            chunks.append(99998 - (len(header) if len(chunks) == 0 else len(continuation)))
+            # FIXME: 99998 chunks
+            chunks.append(20000 - (len(header) if len(chunks) == 0 else len(continuation)))
         logging.debug("Calculated chunks of length: {}".format(", ".join([str(c) for c in chunks])))
 
         with open(filename, "rb") as fh:
@@ -594,5 +596,31 @@ class CertusConnection(BaseConnection):
                 message_id = response.splitlines()[0].split(":")[1]
                 logging.info("Sent {} bytes with message ID {}".format(len(message), message_id))
 
+                # TODO: use IMTMOS for checking status of message sending
+                sent = False
+                retries = 0
+
+                while not sent:
+                    response = self.modem_command("AT+IMTMOS={}".format(message_id))
+                    status = 0
+
+                    try:
+                        message_response = response.splitlines()[0].split(":")[1]
+                        status = int(message_response.strip().split(",")[1])
+                    except (IndexError, TypeError, ValueError) as e:
+                        logging.error("Something wrong converting IMTMOS status value {} - {}".
+                                      format(status, e))
+
+                    if status == 5:
+                        logging.debug("Message id {} successfully sent".format(message_id))
+                        sent = True
+                    elif retries < 3:
+                        retries += 1
+                        tm.sleep(10)
+                    else:
+                        # TODO: record failed scenario for chunk
+                        break
+
+        logging.info("{} being added to {}".format(filename, cache_name))
         with open(cache_name, "w") as fs:
             fs.write("{}\n".format(filename))

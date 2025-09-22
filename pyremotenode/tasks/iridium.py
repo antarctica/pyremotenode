@@ -37,10 +37,10 @@ class FileSender(BaseSender):
         logging.debug("Running default action for FileSender")
 
         if type(invoking_task.message) == list:
-            logging.debug("Invoking tasks output is a list, goooooood")
+            logging.debug("Invoking tasks output is a list of {} items".format(len(invoking_task.message)))
 
             for f in invoking_task.message:
-                # TODO: Wrap this in a function to hash and SBD the file?
+                logging.info("Scheduling {} to be sent as a file".format(f))
                 self.modem.send_file(f)
         else:
             logging.warning("File sender must be passed a task with output of a file list")
