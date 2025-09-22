@@ -45,6 +45,7 @@ setup(
     },
     extras_require={
         'docs': [],
+        'receiver': [],
         'test': ['pytest>3,<6']
     },
     tests_require=['pytest>3,<6'],
