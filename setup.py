@@ -46,6 +46,7 @@ setup(
     extras_require={
         'docs': [],
         'receiver': [],
+        'release': ["build==0.5.1","twine==1.15.0"],
         'test': ['pytest>3,<6']
     },
     tests_require=['pytest>3,<6'],
