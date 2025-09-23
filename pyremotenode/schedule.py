@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shlex
 import signal
 import subprocess
@@ -175,14 +176,19 @@ class Scheduler(object):
         logging.info("Configuring tasks from defined actions".format(
             ", applying mute list from {}".format(mute_config)
         ))
-        mute_list = list()
+        mute_list = dict()
         if mute_config is not None and os.path.exists(mute_config):
             logging.debug("Opening mute configuration {}".format(mute_config))
             with open(mute_config, "r") as fh:
-                mute_list = [line.strip() for line in fh.readlines()]
+                for line in fh.readlines():
+                    try:
+                        mute = re.search(r"^([^:\s]+):?\s*(.+)?$", line.strip())
+                        mute_list[mute.groups()[0]] = mute.groups()[1]
+                    except (AttributeError, ValueError, IndexError, re.error):
+                        logging.warning("Error reading line \"{}\" from mute list".format(line))
 
         for idx, cfg in enumerate(self._cfg['actions']):
-            if cfg["id"] in mute_list:
+            if cfg["id"] in mute_list and mute_list[cfg["id"]] is None:
                 logging.info("Muting {} by scheduling a DummyTask with non-communicative config".format(cfg["id"]))
                 action = SchedulerAction({
                     k: v for k, v in cfg.items()
@@ -196,7 +202,11 @@ class Scheduler(object):
                 )
             else:
                 logging.debug("Configuring action instance {0}: type {1}".format(idx, cfg['task']))
-                action = SchedulerAction(cfg)
+                action = SchedulerAction({
+                    k: v for k, v in cfg.items()
+                    if (cfg["id"] not in mute_list or
+                        cfg["id"] in mute_list and k not in mute_list[cfg["id"]])
+                })
                 args = dict() if 'args' not in cfg else cfg['args']
                 obj = TaskInstanceFactory.get_item(
                     id=cfg["id"],
