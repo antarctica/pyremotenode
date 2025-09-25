@@ -34,7 +34,6 @@ class ModemLock(object):
             logging.warning("Barring use of the modem during pre-determined window")
             return False
 
-        logging.debug("Acquiring modem lock")
         res = self._lock.acquire(**kwargs)
 
         if res:
@@ -61,7 +60,6 @@ class ModemLock(object):
             # This doesn't need to be configurable, the DIO will be instantly switched off so we'll just give it a
             # second or two to avoid super-quick turnaround
             tm.sleep(2)
-        logging.debug("Releasing the modem lock")
         return self._lock.release()
 
     def _in_offline_time(self):

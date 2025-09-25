@@ -34,7 +34,7 @@ class FileSender(BaseSender):
         super().__init__(**kwargs)
 
     def default_action(self, invoking_task, **kwargs):
-        logging.debug("Running default action for FileSender, message:\n{}")
+        logging.debug("Running default action for FileSender, message:\n{}".format(invoking_task.message))
 
         if type(invoking_task.message) == list:
             logging.debug("Invoking tasks output is a list of {} items".format(len(invoking_task.message)))

@@ -336,8 +336,6 @@ class BaseConnection(metaclass=ABCMeta):
                         if self.signal_check(self.min_signal_level):
                             logging.debug("Polling modem for messages")
                             self.poll_for_messages()
-
-                logging.info("Reached end of modem usage for this iteration...")
             except ConnectionException:
                 logging.error("Out of logic modem operations, breaking to restart...")
                 logging.error(traceback.format_exc())
