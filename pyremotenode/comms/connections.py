@@ -175,6 +175,7 @@ class BaseConnection(metaclass=ABCMeta):
         bytes_read = 0
 
         reply = bytearray()
+        stale_reply_num = 0
         modem_response = False
         start = datetime.utcnow()
 
@@ -209,11 +210,18 @@ class BaseConnection(metaclass=ABCMeta):
                 tm.sleep(0.1)
                 if not self.data_conn.in_waiting:
                     modem_response = True
+            else:
+                if len(reply) == 0:
+                    stale_reply_num += 1
+                else:
+                    stale_reply_num = 0
+
+                if stale_reply_num > 600:
+                    logging.warning("We have encountered a stale reply scenario, abandoning further response reads")
+                    modem_response = True
 
         if dont_decode:
             logging.info("Response of {} bytes received".format(bytes_read))
-            # with open("test2.{}.msg".format(bytes_read), "wb") as fh:
-            #    fh.write(reply)
         else:
             reply = reply.decode().strip()
             logging.info('Response received: "{}"'.format(reply))
@@ -347,7 +355,6 @@ class BaseConnection(metaclass=ABCMeta):
                     except RuntimeError:
                         logging.warning("Looks like the lock wasn't acquired, dealing with this...")
 
-            logging.debug("{} thread waiting...".format(self.__class__.__name__))
             tm.sleep(self._modem_wait)
 
     def send_file(self, file, timeout=None):
