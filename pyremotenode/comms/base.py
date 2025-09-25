@@ -4,9 +4,6 @@ import logging
 import pyremotenode.comms.iridium
 from pyremotenode.utils import Configuration
 
-# TODO: We need to implement a shared key security system on the web-exposed service
-# TODO: This whole implementation is intrisincally tied to the TS7400
-
 
 class ModemConnection:
     _instance = None
@@ -20,10 +17,7 @@ class ModemConnection:
             impl = pyremotenode.comms.iridium.RudicsConnection \
                 if "type" not in cfg["ModemConnection"] or cfg["ModemConnection"]["type"] != "certus" \
                 else pyremotenode.comms.iridium.CertusConnection
-            logging.debug("ModemConnection instantiation")
             ModemConnection._instance = impl(cfg)
-        else:
-            logging.debug("ModemConnection already instantiated")
 
     def __getattr__(self, item):
         return getattr(self._instance, item)
