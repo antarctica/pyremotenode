@@ -425,6 +425,12 @@ class CertusConnection(BaseConnection):
         0x6e17, 0x7e36, 0x4e55, 0x5e74, 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0,
     ]
 
+    def __init__(self, cfg, *args, **kwargs):
+        super().__init__(cfg, *args, **kwargs)
+
+        self._imt_max_bytes = bool(cfg['ModemConnection']['imt_max_bytes']) \
+            if 'imt_max_bytes' in cfg['ModemConnection'] else 99990
+
     @staticmethod
     def calculate_crc16(payload, crc=0):
         """
@@ -537,7 +543,7 @@ class CertusConnection(BaseConnection):
             return False
 
         previous_files = list()
-        cache_name = os.path.join(os.environ["HOME"], "filesender.cache")
+        cache_name = "filesender.cache"
         if os.path.exists(cache_name):
             logging.debug("Opening cache {}".format(cache_name))
             with open(cache_name, "r") as fs:
@@ -566,8 +572,7 @@ class CertusConnection(BaseConnection):
 
         chunks = list()
         while sum(chunks) < file_length:
-            # FIXME: 99998 chunks
-            chunks.append(20000 - (len(header) if len(chunks) == 0 else len(continuation)))
+            chunks.append(self._imt_max_bytes - (len(header) if len(chunks) == 0 else len(continuation)))
         logging.debug("Calculated chunks of length: {}".format(", ".join([str(c) for c in chunks])))
 
         with open(filename, "rb") as fh:
