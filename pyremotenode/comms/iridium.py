@@ -1,4 +1,5 @@
 import binascii
+import json
 import logging
 import os
 import re
@@ -542,16 +543,12 @@ class CertusConnection(BaseConnection):
             logging.warning("{} does not exist, we will not try and send it".format(filename))
             return False
 
-        previous_files = list()
+        previous_files = dict()
         cache_name = "filesender.cache"
         if os.path.exists(cache_name):
             logging.debug("Opening cache {}".format(cache_name))
             with open(cache_name, "r") as fs:
-                previous_files += [line.strip() for line in fs.readlines()]
-
-        if filename in previous_files:
-            logging.debug("Not file sending {} as it's in the cache already".format(filename))
-            return True
+                previous_files = json.load(fs)
 
         file_length = os.stat(filename)[stat.ST_SIZE]
         file_basename = os.path.basename(filename).encode("latin-1")[:255]
@@ -571,15 +568,29 @@ class CertusConnection(BaseConnection):
                                     file_length, 0, 0)
 
         chunks = list()
-        while sum(chunks) < file_length:
-            chunks.append(self._imt_max_bytes - (len(header) if len(chunks) == 0 else len(continuation)))
+        while sum(chunks) <= file_length:
+            chunks.append(min(self._imt_max_bytes - (len(header) if len(chunks) == 0 else len(continuation)),
+                              file_length - sum(chunks)))
         logging.debug("Calculated chunks of length: {}".format(", ".join([str(c) for c in chunks])))
 
+        if (filename in previous_files.keys()
+                and type(previous_files[filename]) is list
+                and len(chunks) == len(previous_files[filename])):
+            logging.warning("Not file sending {} as it's in the cache and {} chunks "
+                            "sent already".format(filename, len(chunks)))
+            return True
+
         with open(filename, "rb") as fh:
+            if filename not in previous_files:
+                previous_files[filename] = list()
+
             for i, chunk in enumerate(chunks):
                 message_header = header if i == 0 else continuation
-                file_data = fh.read(chunk)
                 start = sum(chunks[:i])
+                if start in previous_files[filename]:
+                    # We are skipping this chunk as it's been recorded on disk
+                    continue
+                file_data = fh.read(chunk)
                 end = min(sum(chunks[:i])+chunk, file_length)
                 logging.debug("Sending {} bytes from {} between {} and {}".format(
                     len(file_data), filename, start, end))
@@ -601,7 +612,6 @@ class CertusConnection(BaseConnection):
                 message_id = response.splitlines()[0].split(":")[1]
                 logging.info("Sent {} bytes with message ID {}".format(len(message), message_id))
 
-                # TODO: use IMTMOS for checking status of message sending
                 sent = False
                 retries = 0
 
@@ -618,14 +628,13 @@ class CertusConnection(BaseConnection):
 
                     if status == 5:
                         logging.debug("Message id {} successfully sent".format(message_id))
+                        previous_files[filename].append(chunk)
+                        with open(cache_name, "w") as fs:
+                            json.dump(previous_files, fs)
                         sent = True
-                    elif retries < 3:
+                    elif retries < 60:
                         retries += 1
                         tm.sleep(10)
                     else:
-                        # TODO: record failed scenario for chunk
+                        # TODO: record failed scenario for chunk?
                         break
-
-        logging.info("{} being added to {}".format(filename, cache_name))
-        with open(cache_name, "w") as fs:
-            fs.write("{}\n".format(filename))
