@@ -566,9 +566,10 @@ class CertusConnection(BaseConnection):
         continuation += struct.pack("!iLLL",
                                     binascii.crc32(file_basename) & 0xffff,
                                     file_length, 0, 0)
-
+        #
         chunks = list()
-        while sum(chunks) <= file_length:
+        while sum(chunks) < file_length:
+            print(sum(chunks))
             chunks.append(min(self._imt_max_bytes - (len(header) if len(chunks) == 0 else len(continuation)),
                               file_length - sum(chunks)))
         logging.debug("Calculated chunks of length: {}".format(", ".join([str(c) for c in chunks])))
