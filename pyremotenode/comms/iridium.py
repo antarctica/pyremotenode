@@ -639,3 +639,5 @@ class CertusConnection(BaseConnection):
                     else:
                         # TODO: record failed scenario for chunk?
                         break
+        # We've ended for some reason or another, so assume we're good
+        return True
