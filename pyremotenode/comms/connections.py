@@ -165,10 +165,10 @@ class BaseConnection(metaclass=ABCMeta):
 
         if not raw:
             self.data_conn.write("{}{}".format(message.strip(), self.terminator).encode("latin-1"))
-            logging.info('Message sent: "{}"'.format(message.strip()))
+            logging.info('Command sent: "{}"'.format(message.strip()))
         else:
             self.data_conn.write(message)
-            logging.debug("Binary message of length {} bytes sent".format(len(message)))
+            logging.debug("Binary command of length {} bytes sent".format(len(message)))
 
         # It seems possible that we don't get a response back sometimes, not sure why. Facilitate breaking comms
         # for another attempt in this case, else we'll end up in an infinite loop

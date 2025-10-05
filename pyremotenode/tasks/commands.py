@@ -37,7 +37,7 @@ class Command(BaseTask):
         except subprocess.CalledProcessError as e:
             if not self.binary:
                 logging.warning("Got error code {0} and message: {1}".format(e.returncode, e.output))
-            # TODO: Evaluate how this will be handled in the end
+            # TODO: these are all wrong, we should be trapping and returning OK/WARN/CRIT
             raise TaskException("The called command failed with an out of bound return code...")
 
         if not self.binary:

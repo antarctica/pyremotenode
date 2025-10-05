@@ -10,7 +10,7 @@ setup(
     name='pyremotenode',
     packages=find_packages(),
     include_package_data=True,
-    version="0.6.2a2",
+    version="0.6.2a3",
     author="James Byrne",
     author_email="digitalinnovation@bas.ac.uk",
     description="A service library for controlling low power devices",

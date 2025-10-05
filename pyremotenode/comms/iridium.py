@@ -508,7 +508,7 @@ class CertusConnection(BaseConnection):
 
                     self.output_recv_message(mt_msg_id,
                                              # Remove the unnecessary checksum inclusion
-                                             int(mt_msg_len) - 2,
+                                             int(mt_msg_len),
                                              message,
                                              calcd_chksum,
                                              recv_chksum)
