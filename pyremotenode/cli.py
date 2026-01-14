@@ -4,6 +4,7 @@ import os
 import traceback
 
 from pyremotenode.receiver.certus import JSONDataReceiver, DataReceiverHandler
+from pyremotenode.receiver.transfer import reconstruct_files
 from pyremotenode.schedule import Scheduler
 from pyremotenode.utils import Configuration, setup_logging
 from pyremotenode.utils.system import background_fork
@@ -91,4 +92,27 @@ def receiver_main():
     logging.info("Starting server")
     ss.serve_forever()
     logging.info("Stopped listening for data...")
+
+
+def convert_main():
+    a = argparse.ArgumentParser()
+    a.add_argument("--verbose", "-v", help="Debugging information",
+                   default=False, action="store_true")
+    a.add_argument("--output-dir", "-o",
+                   help="Output directory for files",
+                   default=".")
+    a.add_argument("input_files",
+                   help="List of files you want to reconstruct",
+                   nargs="+")
+    args = a.parse_args()
+
+    setup_logging("converting",
+                  logdir=None,
+                  verbose=args.verbose)
+
+    logging.info("Reading {} files".format(args.input_files))
+    valid_files = reconstruct_files(args.input_files)
+    logging.info("Got {} valid files from input".format(len(valid_files)))
+
+
 

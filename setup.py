@@ -40,7 +40,7 @@ setup(
     entry_points={
         "console_scripts": [
             "run_receiver = pyremotenode.cli:receiver_main",
-            "run_receiver = pyremotenode.cli:receiver_main",
+            "run_reconstruction = pyremotenode.cli:convert_main",
             "run_pyremotenode = pyremotenode.cli:remotenode_main",
         ]
     },
