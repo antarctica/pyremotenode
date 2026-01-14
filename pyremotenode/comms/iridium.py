@@ -520,6 +520,8 @@ class CertusConnection(BaseConnection):
         if msg:
             text = msg.get_message_text()
 
+            if len(text) == 0:
+                return True
             response = self.modem_command("AT+IMTWB={}".format(len(text)))
             if response.startswith("+IMTWB ERROR: 2"):
                 logging.warning("Message is too big")
