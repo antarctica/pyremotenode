@@ -631,7 +631,7 @@ class CertusConnection(BaseConnection):
 
                     if status == 5:
                         logging.debug("Message id {} successfully sent".format(message_id))
-                        previous_files[filename].append(chunk)
+                        previous_files[filename].append(start)
                         with open(cache_name, "w") as fs:
                             json.dump(previous_files, fs)
                         sent = True
