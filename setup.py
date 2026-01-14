@@ -10,7 +10,7 @@ setup(
     name='pyremotenode',
     packages=find_packages(),
     include_package_data=True,
-    version="0.6.2a3",
+    version="0.6.2a4",
     author="James Byrne",
     author_email="digitalinnovation@bas.ac.uk",
     description="A service library for controlling low power devices",
@@ -39,6 +39,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
+            "run_receiver = pyremotenode.cli:receiver_main",
             "run_receiver = pyremotenode.cli:receiver_main",
             "run_pyremotenode = pyremotenode.cli:remotenode_main",
         ]

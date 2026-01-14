@@ -67,21 +67,9 @@ def remotenode_main():
 
 def receiver_main():
     a = argparse.ArgumentParser()
-    a.add_argument("-d", "--debug",
-                   help="Write a transaction log",
-                   action="store_true",
-                   default=False)
     a.add_argument("--log-dir", "-l",
                    help="Log directory",
                    default="logs")
-    a.add_argument("--pidfile", "-p",
-                   help="PID file to manage for service operations",
-                   default=os.path.join(os.sep,
-                                        "var",
-                                        "run",
-                                        "{0}.pid".format(__name__)))
-    a.add_argument("--no-pidfile", "-np", help="Don't check or create PID file",
-                   default=False, action="store_true")
     a.add_argument("--no-daemon", "-n", help="Do not daemon",
                    default=False, action="store_true")
     a.add_argument("--verbose", "-v", help="Debugging information",
