@@ -7,7 +7,7 @@ import sys
 
 from pyremotenode.utils.config import Configuration
 
-__all__ = ["Configuration"]
+__all__ = ["Configuration", "setup_logging"]
 
 
 def setup_logging(name='',
