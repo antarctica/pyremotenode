@@ -110,7 +110,7 @@ def convert_main():
                   logdir=None,
                   verbose=args.verbose)
 
-    logging.info("Reading {} files".format(args.input_files))
+    logging.info("Reading {} files".format(len(args.input_files)))
     valid_files = reconstruct_files(args.input_files)
     logging.info("Got {} valid files from input".format(len(valid_files)))
 
