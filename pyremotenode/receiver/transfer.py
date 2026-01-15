@@ -9,14 +9,14 @@ from pprint import pformat
 
 def reconstruct_files(input_files: list,
                       output_directory: str = "."):
-    """
+    """Reconstruct files from raw content message files from Iridium
 
     Args:
         input_files:
         output_directory:
 
     Returns:
-
+        (list) the output paths to files reconstructed
     """
     logging.debug("Got the following files:\n{}".format(pformat(input_files)))
     header_format = "!iB{}sLLL"
@@ -91,10 +91,12 @@ def reconstruct_files(input_files: list,
 
     for data_fn, seg_key, total_length in crc_details["headers"]:
         data_fn = data_fn.decode()
+
+        # We should not try to reconstruct files if length and segments are not correct
         total_segments_length = sum([df["end"] - df["start"] for df in crc_details["segments"][seg_key]])
         if total_segments_length != total_length:
-            logging.warning("Mismatch of length, four segments length {} does not match {}".
-                            format(total_segments_length, total_length))
+            logging.warning("Mismatch of length, {} segments length {} does not match {}".
+                            format(len(crc_details["segments"][seg_key]), total_segments_length, total_length))
             continue
 
         logging.info("Attempting {} reconstruction from {} segments".format(
@@ -103,6 +105,8 @@ def reconstruct_files(input_files: list,
         if not os.path.exists(output_directory):
             raise RuntimeError("{} does not exist, cannot output to it".format(output_directory))
 
+        # We're good to output, so create a file and move content from each segment
+        # file into it, offsetting so that we don't copy protocol headers
         output_path = os.path.join(output_directory, data_fn)
         with open(output_path, "wb") as output_fh:
             sorted_segments = sorted(crc_details["segments"][seg_key], key=lambda x: x["start"])
