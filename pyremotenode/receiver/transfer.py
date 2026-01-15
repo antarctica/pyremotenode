@@ -7,11 +7,13 @@ import struct
 from pprint import pformat
 
 
-def reconstruct_files(input_files: list):
+def reconstruct_files(input_files: list,
+                      output_directory: str = "."):
     """
 
     Args:
         input_files:
+        output_directory:
 
     Returns:
 
@@ -85,7 +87,10 @@ def reconstruct_files(input_files: list):
     crc_details["segments"] = {k: v for k, v in crc_details["segments"].items() if k in valid_segment_keys}
 
     # Go through the headers and try and output data files
+    outputted_paths = list()
+
     for data_fn, seg_key, total_length in crc_details["headers"]:
+        data_fn = data_fn.decode()
         total_segments_length = sum([df["end"] - df["start"] for df in crc_details["segments"][seg_key]])
         if total_segments_length != total_length:
             logging.warning("Mismatch of length, four segments length {} does not match {}".
@@ -95,4 +100,23 @@ def reconstruct_files(input_files: list):
         logging.info("Attempting {} reconstruction from {} segments".format(
             data_fn, len(crc_details["segments"][seg_key])))
 
-    return []
+        if not os.path.exists(output_directory):
+            raise RuntimeError("{} does not exist, cannot output to it".format(output_directory))
+
+        output_path = os.path.join(output_directory, data_fn)
+        with open(output_path, "wb") as output_fh:
+            sorted_segments = sorted(crc_details["segments"][seg_key], key=lambda x: x["start"])
+
+            for i, segment in enumerate([df["fn"] for df in sorted_segments]):
+                offset = struct.calcsize(header_format.format(len(data_fn))) \
+                    if i == 0 else continuation_length + indexes_length
+
+                logging.debug("Opening segment {} from offset {}".format(segment, offset))
+                with open(segment, "rb") as input_fh:
+                    input_fh.seek(offset)
+                    output_fh.write(input_fh.read())
+                    logging.info("Wrote {} to {}".format(output_path, output_fh.tell()))
+
+        outputted_paths.append(output_path)
+
+    return outputted_paths
