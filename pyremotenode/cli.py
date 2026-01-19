@@ -4,6 +4,7 @@ import os
 import traceback
 
 from pyremotenode.receiver.certus import JSONDataReceiver, DataReceiverHandler
+from pyremotenode.receiver.transfer import reconstruct_files
 from pyremotenode.schedule import Scheduler
 from pyremotenode.utils import Configuration, setup_logging
 from pyremotenode.utils.system import background_fork
@@ -67,21 +68,9 @@ def remotenode_main():
 
 def receiver_main():
     a = argparse.ArgumentParser()
-    a.add_argument("-d", "--debug",
-                   help="Write a transaction log",
-                   action="store_true",
-                   default=False)
     a.add_argument("--log-dir", "-l",
                    help="Log directory",
                    default="logs")
-    a.add_argument("--pidfile", "-p",
-                   help="PID file to manage for service operations",
-                   default=os.path.join(os.sep,
-                                        "var",
-                                        "run",
-                                        "{0}.pid".format(__name__)))
-    a.add_argument("--no-pidfile", "-np", help="Don't check or create PID file",
-                   default=False, action="store_true")
     a.add_argument("--no-daemon", "-n", help="Do not daemon",
                    default=False, action="store_true")
     a.add_argument("--verbose", "-v", help="Debugging information",
@@ -103,4 +92,28 @@ def receiver_main():
     logging.info("Starting server")
     ss.serve_forever()
     logging.info("Stopped listening for data...")
+
+
+def convert_main():
+    a = argparse.ArgumentParser()
+    a.add_argument("--verbose", "-v", help="Debugging information",
+                   default=False, action="store_true")
+    a.add_argument("--output-dir", "-o",
+                   help="Output directory for files",
+                   default=".")
+    a.add_argument("input_files",
+                   help="List of files you want to reconstruct",
+                   nargs="+")
+    args = a.parse_args()
+
+    setup_logging("converting",
+                  logdir=None,
+                  verbose=args.verbose)
+
+    logging.info("Reading {} files".format(len(args.input_files)))
+    valid_files = reconstruct_files(args.input_files,
+                                    args.output_dir)
+    logging.info("Got {} valid files from input".format(len(valid_files)))
+
+
 

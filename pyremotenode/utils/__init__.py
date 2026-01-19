@@ -7,7 +7,7 @@ import sys
 
 from pyremotenode.utils.config import Configuration
 
-__all__ = ["Configuration"]
+__all__ = ["Configuration", "setup_logging"]
 
 
 def setup_logging(name='',
@@ -19,7 +19,7 @@ def setup_logging(name='',
     if verbose:
         level = logging.DEBUG
 
-    if not os.path.exists(logdir):
+    if logdir and not os.path.exists(logdir):
         raise RuntimeError("{} must exist before running PyRemoteNode".
                            format(logdir))
 

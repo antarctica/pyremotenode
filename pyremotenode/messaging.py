@@ -114,6 +114,9 @@ class MessageProcessor:
         except UnicodeDecodeError as e:
             result = "Could not encode return from command : {}".format(e.reason).encode()
             logging.exception(result)
+        else:
+            if len(result) == 0:
+                result = "NO COMMAND OUTPUT".encode()
 
         sbd = self._sender(id="message_execute", binary=True)
         sbd.send_message(result, include_date=True)

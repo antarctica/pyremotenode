@@ -520,6 +520,8 @@ class CertusConnection(BaseConnection):
         if msg:
             text = msg.get_message_text()
 
+            if len(text) == 0:
+                return True
             response = self.modem_command("AT+IMTWB={}".format(len(text)))
             if response.startswith("+IMTWB ERROR: 2"):
                 logging.warning("Message is too big")
@@ -629,7 +631,7 @@ class CertusConnection(BaseConnection):
 
                     if status == 5:
                         logging.debug("Message id {} successfully sent".format(message_id))
-                        previous_files[filename].append(chunk)
+                        previous_files[filename].append(start)
                         with open(cache_name, "w") as fs:
                             json.dump(previous_files, fs)
                         sent = True
